@@ -265,3 +265,312 @@ sb.auth.onAuthStateChange((event, session) => {
     loadRecent();
   } else {
     currentUser = null;
+    document.getElementById('authScreen').style.display = 'block';
+    document.getElementById('app').style.display = 'none';
+  }
+});
+
+async function checkConnection() {
+  const dot = document.getElementById('statusDot');
+  try {
+    const { error } = await sb.from('thoughts').select('id').limit(1);
+    dot.className = error ? 'dot off' : 'dot on';
+  } catch {
+    dot.className = 'dot off';
+  }
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'recent') loadRecent();
+  });
+});
+
+let recognition = null;
+let listening = false;
+const micBtn = document.getElementById('micBtn');
+const micStatus = document.getElementById('micStatus');
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRecognitionAPI) {
+  recognition = new SpeechRecognitionAPI();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = (event) => {
+    let transcript = '';
+    for (let i = 0; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript;
+    }
+    document.getElementById('voiceTranscript').value = transcript;
+  };
+  recognition.onerror = () => {
+    listening = false;
+    micBtn.classList.remove('listening');
+    micStatus.textContent = 'Error — tap to try again';
+  };
+  recognition.onend = () => {
+    listening = false;
+    micBtn.classList.remove('listening');
+    micStatus.textContent = 'Tap to speak';
+  };
+} else {
+  micStatus.textContent = 'Voice not supported in this browser (try Chrome or Edge)';
+  micBtn.disabled = true;
+}
+
+micBtn.addEventListener('click', () => {
+  if (!recognition) return;
+  if (listening) {
+    recognition.stop();
+  } else {
+    document.getElementById('voiceTranscript').value = '';
+    recognition.start();
+    listening = true;
+    micBtn.classList.add('listening');
+    micStatus.textContent = 'Listening... tap to stop';
+  }
+});
+
+document.getElementById('voiceSaveBtn').addEventListener('click', async () => {
+  const text = document.getElementById('voiceTranscript').value.trim();
+  const msgEl = document.getElementById('voiceMsg');
+  if (!text) { showMsg(msgEl, 'Nothing to save yet.', false); return; }
+  try {
+    const { error } = await sb.from('thoughts').insert({ content: text, user_id: currentUser.id });
+    if (error) throw error;
+    showMsg(msgEl, 'Saved!', true);
+    document.getElementById('voiceTranscript').value = '';
+  } catch (err) {
+    showMsg(msgEl, err.message || 'Save failed.', false);
+  }
+});
+
+function extractYouTubeId(url) {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=)([^&]+)/,
+    /(?:youtu\.be\/)([^?&]+)/,
+    /(?:youtube\.com\/embed\/)([^?&]+)/,
+    /(?:youtube\.com\/shorts\/)([^?&]+)/
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+let currentYtId = null;
+let currentYtTitle = '';
+
+document.getElementById('ytLoadBtn').addEventListener('click', async () => {
+  const url = document.getElementById('ytUrl').value.trim();
+  const msgEl = document.getElementById('ytMsg');
+  const id = extractYouTubeId(url);
+  if (!id) { showMsg(msgEl, 'Could not find a video ID in that URL.', false); return; }
+  currentYtId = id;
+  try {
+    const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + id)}&format=json`);
+    if (!res.ok) throw new Error('Could not load video info.');
+    const data = await res.json();
+    currentYtTitle = decodeEntities(data.title || 'Untitled video');
+    document.getElementById('ytPreview').innerHTML = `
+      <div style="display:flex; gap:10px; align-items:center;">
+        <img src="${data.thumbnail_url}" style="width:100px; border-radius:8px;">
+        <div style="font-size:14px;">${currentYtTitle}</div>
+      </div>`;
+    document.getElementById('ytTranscriptLink').href = `https://www.youtube.com/watch?v=${id}`;
+    document.getElementById('ytTranscriptArea').style.display = 'block';
+  } catch (err) {
+    showMsg(msgEl, err.message || 'Could not load that video.', false);
+  }
+});
+
+document.getElementById('ytSaveBtn').addEventListener('click', async () => {
+  const transcript = document.getElementById('ytTranscriptText').value.trim();
+  const msgEl = document.getElementById('ytMsg');
+  if (!transcript) { showMsg(msgEl, 'Paste the transcript first.', false); return; }
+  try {
+    const content = `📹 YouTube: ${currentYtTitle}\n\n${transcript}`;
+    const { data: thought, error } = await sb.from('thoughts')
+      .insert({ content, user_id: currentUser.id, metadata: { video_id: currentYtId } })
+      .select().single();
+    if (error) throw error;
+    try {
+      await sb.from('thought_sources').insert({
+        thought_id: thought.id, user_id: currentUser.id,
+        source_text: transcript, source_kind: 'youtube_transcript',
+        char_count: transcript.length, truncated: false
+      });
+    } catch (srcErr) {
+      console.warn('thought_sources insert failed (non-fatal):', srcErr);
+    }
+    showMsg(msgEl, 'Saved!', true);
+    document.getElementById('ytTranscriptText').value = '';
+    document.getElementById('ytUrl').value = '';
+    document.getElementById('ytTranscriptArea').style.display = 'none';
+    document.getElementById('ytPreview').innerHTML = '';
+  } catch (err) {
+    showMsg(msgEl, err.message || 'Save failed.', false);
+  }
+});
+
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+const pdfDropZone = document.getElementById('pdfDropZone');
+const pdfInput = document.getElementById('pdfInput');
+
+pdfDropZone.addEventListener('click', () => pdfInput.click());
+pdfDropZone.addEventListener('dragover', (e) => { e.preventDefault(); pdfDropZone.classList.add('drag'); });
+pdfDropZone.addEventListener('dragleave', () => pdfDropZone.classList.remove('drag'));
+pdfDropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  pdfDropZone.classList.remove('drag');
+  if (e.dataTransfer.files.length) handlePdfFile(e.dataTransfer.files[0]);
+});
+pdfInput.addEventListener('change', (e) => {
+  if (e.target.files.length) handlePdfFile(e.target.files[0]);
+});
+
+let currentPdfName = '';
+
+async function handlePdfFile(file) {
+  const msgEl = document.getElementById('pdfMsg');
+  if (file.type !== 'application/pdf') { showMsg(msgEl, 'Please choose a PDF file.', false); return; }
+  currentPdfName = file.name;
+  document.getElementById('pdfProgressWrap').style.display = 'block';
+  document.getElementById('pdfReviewArea').style.display = 'none';
+  const fill = document.getElementById('pdfProgressFill');
+  const label = document.getElementById('pdfProgressLabel');
+  fill.style.width = '0%';
+  try {
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      label.textContent = `Extracting page ${i} of ${pdf.numPages}...`;
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map(item => item.str).join(' ');
+      fullText += pageText + '\n\n';
+      fill.style.width = Math.round((i / pdf.numPages) * 100) + '%';
+    }
+    document.getElementById('pdfText').value = decodeEntities(fullText.trim());
+    document.getElementById('pdfProgressWrap').style.display = 'none';
+    document.getElementById('pdfReviewArea').style.display = 'block';
+  } catch (err) {
+    document.getElementById('pdfProgressWrap').style.display = 'none';
+    showMsg(msgEl, 'Could not read that PDF: ' + (err.message || 'unknown error'), false);
+  }
+}
+
+document.getElementById('pdfSaveBtn').addEventListener('click', async () => {
+  const text = document.getElementById('pdfText').value.trim();
+  const msgEl = document.getElementById('pdfMsg');
+  if (!text) { showMsg(msgEl, 'Nothing to save.', false); return; }
+  try {
+    const content = `📄 PDF: ${currentPdfName}\n\n${text}`;
+    const { error } = await sb.from('thoughts').insert({ content, user_id: currentUser.id });
+    if (error) throw error;
+    showMsg(msgEl, 'Saved!', true);
+    document.getElementById('pdfText').value = '';
+    document.getElementById('pdfReviewArea').style.display = 'none';
+  } catch (err) {
+    showMsg(msgEl, err.message || 'Save failed.', false);
+  }
+});
+
+document.getElementById('urlSaveBtn').addEventListener('click', async () => {
+  const url = document.getElementById('urlInput').value.trim();
+  const text = decodeEntities(document.getElementById('urlText').value.trim());
+  const msgEl = document.getElementById('urlMsg');
+  if (!url || !text) { showMsg(msgEl, 'Enter a URL and paste the article text.', false); return; }
+  try {
+    const content = `🔗 URL: ${url}\n\n${text}`;
+    const { data: thought, error } = await sb.from('thoughts')
+      .insert({ content, user_id: currentUser.id, metadata: { url } })
+      .select().single();
+    if (error) throw error;
+    try {
+      await sb.from('thought_sources').insert({
+        thought_id: thought.id, user_id: currentUser.id,
+        source_text: text, source_kind: 'web',
+        char_count: text.length, truncated: false
+      });
+    } catch (srcErr) {
+      console.warn('thought_sources insert failed (non-fatal):', srcErr);
+    }
+    showMsg(msgEl, 'Saved!', true);
+    document.getElementById('urlInput').value = '';
+    document.getElementById('urlText').value = '';
+  } catch (err) {
+    showMsg(msgEl, err.message || 'Save failed.', false);
+  }
+});
+
+function renderThoughtCards(container, thoughts) {
+  if (!thoughts || thoughts.length === 0) {
+    container.innerHTML = '<div style="color:#777; text-align:center; padding:20px;">Nothing here yet.</div>';
+    return;
+  }
+  container.innerHTML = thoughts.map(t => `
+    <div class="thought-card">
+      <div class="thought-meta">${new Date(t.created_at).toLocaleString()}</div>
+      <div class="thought-content">${escapeHtml(t.content).slice(0, 500)}${t.content.length > 500 ? '…' : ''}</div>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+document.getElementById('searchBtn').addEventListener('click', async () => {
+  const q = document.getElementById('searchInput').value.trim();
+  const resultsEl = document.getElementById('searchResults');
+  if (!q) return;
+  try {
+    const { data, error } = await sb.from('thoughts')
+      .select('*').ilike('content', `%${q}%`)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    renderThoughtCards(resultsEl, data);
+  } catch (err) {
+    resultsEl.innerHTML = `<div class="msg err">${err.message || 'Search failed.'}</div>`;
+  }
+});
+
+document.getElementById('searchClearBtn').addEventListener('click', () => {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchResults').innerHTML = '';
+});
+
+async function loadRecent() {
+  const listEl = document.getElementById('recentList');
+  try {
+    const { data, error } = await sb.from('thoughts')
+      .select('*').order('created_at', { ascending: false }).limit(20);
+    if (error) throw error;
+    renderThoughtCards(listEl, data);
+  } catch (err) {
+    listEl.innerHTML = `<div class="msg err">${err.message || 'Could not load thoughts.'}</div>`;
+  }
+}
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
+  });
+}
+</script>
+</body>
+</html>
