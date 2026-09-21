@@ -371,23 +371,18 @@ let currentYtTitle = '';
 document.getElementById('ytLoadBtn').addEventListener('click', async () => {
   const url = document.getElementById('ytUrl').value.trim();
   const msgEl = document.getElementById('ytMsg');
-  const id = extractYouTubeId(url);
-  if (!id) { showMsg(msgEl, 'Could not find a video ID in that URL.', false); return; }
-  currentYtId = id;
+  if (!url) { showMsg(msgEl, 'Paste a YouTube link first.', false); return; }
+  showMsg(msgEl, 'Fetching transcript... this can take a few seconds.', true);
   try {
-    const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + id)}&format=json`);
-    if (!res.ok) throw new Error('Could not load video info.');
-    const data = await res.json();
-    currentYtTitle = decodeEntities(data.title || 'Untitled video');
-    document.getElementById('ytPreview').innerHTML = `
-      <div style="display:flex; gap:10px; align-items:center;">
-        <img src="${data.thumbnail_url}" style="width:100px; border-radius:8px;">
-        <div style="font-size:14px;">${currentYtTitle}</div>
-      </div>`;
-    document.getElementById('ytTranscriptLink').href = `https://www.youtube.com/watch?v=${id}`;
-    document.getElementById('ytTranscriptArea').style.display = 'block';
+    const { data, error } = await sb.functions.invoke('capture-youtube', { body: { url } });
+    if (error) throw error;
+    if (!data.ok) throw new Error(data.error || 'Could not capture that video.');
+    showMsg(msgEl, `Saved: ${data.title}${data.has_transcript ? '' : ' (no captions found — used description)'}`, true);
+    document.getElementById('ytUrl').value = '';
+    document.getElementById('ytPreview').innerHTML = '';
+    document.getElementById('ytTranscriptArea').style.display = 'none';
   } catch (err) {
-    showMsg(msgEl, err.message || 'Could not load that video.', false);
+    showMsg(msgEl, err.message || 'Could not capture that video.', false);
   }
 });
 
@@ -489,29 +484,18 @@ document.getElementById('pdfSaveBtn').addEventListener('click', async () => {
 
 document.getElementById('urlSaveBtn').addEventListener('click', async () => {
   const url = document.getElementById('urlInput').value.trim();
-  const text = decodeEntities(document.getElementById('urlText').value.trim());
   const msgEl = document.getElementById('urlMsg');
-  if (!url || !text) { showMsg(msgEl, 'Enter a URL and paste the article text.', false); return; }
+  if (!url) { showMsg(msgEl, 'Enter a URL.', false); return; }
+  showMsg(msgEl, 'Fetching page... this can take a few seconds.', true);
   try {
-    const content = `🔗 URL: ${url}\n\n${text}`;
-    const { data: thought, error } = await sb.from('thoughts')
-      .insert({ content, user_id: currentUser.id, metadata: { url } })
-      .select().single();
+    const { data, error } = await sb.functions.invoke('capture-url', { body: { url } });
     if (error) throw error;
-    try {
-      await sb.from('thought_sources').insert({
-        thought_id: thought.id, user_id: currentUser.id,
-        source_text: text, source_kind: 'web',
-        char_count: text.length, truncated: false
-      });
-    } catch (srcErr) {
-      console.warn('thought_sources insert failed (non-fatal):', srcErr);
-    }
-    showMsg(msgEl, 'Saved!', true);
+    if (!data.ok) throw new Error(data.error || 'Could not capture that page.');
+    showMsg(msgEl, `Saved: ${data.title}`, true);
     document.getElementById('urlInput').value = '';
     document.getElementById('urlText').value = '';
   } catch (err) {
-    showMsg(msgEl, err.message || 'Save failed.', false);
+    showMsg(msgEl, err.message || 'Could not capture that page.', false);
   }
 });
 
