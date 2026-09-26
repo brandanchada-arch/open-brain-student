@@ -13,6 +13,8 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // This one you created yourself in Step 2 — it's the password that
 // keeps random people on the internet from calling your brain.
 const MCP_ACCESS_KEY = Deno.env.get("MCP_ACCESS_KEY")!;
+// Whose brain this is. Every thought saved through MCP gets stamped with it.
+const BRAIN_OWNER_ID = Deno.env.get("BRAIN_OWNER_ID") ?? null;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -180,7 +182,7 @@ Deno.serve(async (req) => {
         const content = args.content ?? "";
         const { data, error } = await supabase
           .from("thoughts")
-          .insert({ content })
+                    .insert({ content, user_id: BRAIN_OWNER_ID })
           .select()
           .single();
 
