@@ -18,6 +18,11 @@ const BRAIN_OWNER_ID = Deno.env.get("BRAIN_OWNER_ID") ?? null;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+// How many linked thoughts to show under each search result,
+// and how much of each one to preview.
+const MAX_CONNECTED = 5;
+const PREVIEW_CHARS = 200;
+
 // Standard CORS headers so browsers/tools calling this from elsewhere don't get blocked.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,11 +36,16 @@ const corsHeaders = {
 const TOOLS = [
   {
     name: "search_thoughts",
-    description: "Search stored thoughts by keyword and return matching results.",
+    description:
+      "Search stored thoughts by MEANING (semantic search). Finds related ideas even when " +
+      "they use different words than the query. Each result includes a similarity score " +
+      "from 0 to 1 (higher = closer in meaning), plus a 'connected' list: other thoughts " +
+      "linked to it in the thought graph. Use the connected thoughts to surface related " +
+      "ideas the user may have forgotten about.",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Keyword or phrase to search for" },
+        query: { type: "string", description: "What you're looking for, in plain language" },
       },
       required: ["query"],
     },
@@ -73,6 +83,98 @@ function rpcError(id: number | string | null, code: number, message: string) {
   return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
+// Level 6: turn text into an embedding by calling generate-embedding.
+// Returns null on any failure, so search can fall back to keywords.
+async function generateEmbedding(text: string): Promise<number[] | null> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-embedding`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !Array.isArray(data.embedding)) {
+      console.error(`generate-embedding returned ${res.status}:`, data?.error ?? data);
+      return null;
+    }
+    return data.embedding;
+  } catch (err) {
+    console.error("generate-embedding call failed:", err);
+    return null;
+  }
+}
+
+function preview(text: string) {
+  const clean = String(text ?? "").replace(/\s+/g, " ").trim();
+  return clean.length > PREVIEW_CHARS ? clean.slice(0, PREVIEW_CHARS) + "…" : clean;
+}
+
+// Level 6: for each search result, look up its links in the thought graph
+// (in either direction) and attach short previews of the connected thoughts.
+// If anything goes wrong, results come back unchanged — search never breaks.
+async function attachConnections(results: any[]) {
+  if (results.length === 0) return results;
+
+  try {
+    const ids = results.map((r) => r.id);
+    const idList = ids.join(",");
+
+    const { data: links, error } = await supabase
+      .from("thought_links")
+      .select("source_thought_id, target_thought_id, similarity_score")
+      .or(`source_thought_id.in.(${idList}),target_thought_id.in.(${idList})`);
+    if (error) throw error;
+
+    // For each result, collect the thought on the OTHER end of each link
+    const neighbors = new Map<string, { id: string; score: number }[]>();
+    const otherIds = new Set<string>();
+
+    for (const link of links ?? []) {
+      for (const [self, other] of [
+        [link.source_thought_id, link.target_thought_id],
+        [link.target_thought_id, link.source_thought_id],
+      ]) {
+        if (!ids.includes(self)) continue;
+        if (!neighbors.has(self)) neighbors.set(self, []);
+        neighbors.get(self)!.push({ id: other, score: link.similarity_score });
+        otherIds.add(other);
+      }
+    }
+
+    if (otherIds.size === 0) {
+      return results.map((r) => ({ ...r, connected: [] }));
+    }
+
+    const { data: others, error: othersError } = await supabase
+      .from("thoughts")
+      .select("id, content, created_at")
+      .in("id", [...otherIds]);
+    if (othersError) throw othersError;
+
+    const byId = new Map((others ?? []).map((t: any) => [t.id, t]));
+
+    return results.map((r) => ({
+      ...r,
+      connected: (neighbors.get(r.id) ?? [])
+        .sort((a, b) => b.score - a.score)
+        .slice(0, MAX_CONNECTED)
+        .filter((n) => byId.has(n.id))
+        .map((n) => ({
+          id: n.id,
+          link_similarity: Math.round(n.score * 100) / 100,
+          created_at: byId.get(n.id).created_at,
+          preview: preview(byId.get(n.id).content),
+        })),
+    }));
+  } catch (err) {
+    console.error("Looking up graph connections failed:", err);
+    return results;
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests.
   if (req.method === "OPTIONS") {
@@ -108,27 +210,24 @@ Deno.serve(async (req) => {
   const { id = null, method, params = {} } = body;
 
   try {
-        // --- initialize: the required MCP handshake ---
-    // Every MCP client starts a connection by calling "initialize" first.
-    // We reply with our protocol version and basic server info so the
-    // client knows it's talking to a real MCP server.
+    // --- initialize: the required MCP handshake ---
     if (method === "initialize") {
       return new Response(
         JSON.stringify(rpcResult(id, {
           protocolVersion: "2024-11-05",
           capabilities: { tools: {} },
-          serverInfo: { name: "open-brain-mcp", version: "1.0.0" },
+          serverInfo: { name: "open-brain-mcp", version: "1.2.0" },
         })),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     // --- notifications/initialized: client confirming handshake is done ---
-    // This is a notification (no response expected), so we just acknowledge it.
     if (method === "notifications/initialized") {
       return new Response(null, { status: 202, headers: corsHeaders });
     }
-// --- tools/list: tell the client what tools are available ---
+
+    // --- tools/list: tell the client what tools are available ---
     if (method === "tools/list") {
       return new Response(
         JSON.stringify(rpcResult(id, { tools: TOOLS })),
@@ -142,19 +241,51 @@ Deno.serve(async (req) => {
       const args = params?.arguments ?? {};
 
       if (toolName === "search_thoughts") {
-        const query = args.query ?? "";
-        const { data, error } = await supabase
-          .from("thoughts")
-          .select("id, content, created_at")
-          .ilike("content", `%${query}%`)
-          .order("created_at", { ascending: false })
-          .limit(10);
+        const query = String(args.query ?? "").trim();
 
-        if (error) throw error;
+        // Level 6: semantic search. Turn the query into an embedding,
+        // then ask the database for the thoughts closest in meaning.
+        const queryEmbedding = query ? await generateEmbedding(query) : null;
+
+        let results: any[];
+        let mode: string;
+
+        if (queryEmbedding) {
+          const { data, error } = await supabase.rpc("search_thoughts", {
+            query_embedding: queryEmbedding,
+            match_threshold: 0.3,
+            match_count: 10,
+          });
+          if (error) throw error;
+
+          mode = "semantic";
+          results = (data ?? []).map((r: any) => ({
+            id: r.id,
+            content: r.content,
+            created_at: r.created_at,
+            similarity: Math.round(r.similarity * 100) / 100,
+          }));
+        } else {
+          // Safety net: if embeddings are unavailable, fall back to
+          // plain keyword matching so search never breaks entirely.
+          const { data, error } = await supabase
+            .from("thoughts")
+            .select("id, content, created_at")
+            .ilike("content", `%${query}%`)
+            .order("created_at", { ascending: false })
+            .limit(10);
+          if (error) throw error;
+
+          mode = "keyword (fallback: embeddings unavailable)";
+          results = data ?? [];
+        }
+
+        // Level 6: add each result's graph neighbors
+        results = await attachConnections(results);
 
         return new Response(
           JSON.stringify(rpcResult(id, {
-            content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+            content: [{ type: "text", text: JSON.stringify({ mode, results }, null, 2) }],
           })),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
@@ -180,14 +311,14 @@ Deno.serve(async (req) => {
 
       if (toolName === "add_thought") {
         const content = args.content ?? "";
-            const { data, error } = await supabase
-      .from("thoughts")
-      .upsert(
-        { content, user_id: BRAIN_OWNER_ID },
-        { onConflict: "dedup_key,user_id", ignoreDuplicates: false }
-      )
-      .select()
-      .single();
+        const { data, error } = await supabase
+          .from("thoughts")
+          .upsert(
+            { content, user_id: BRAIN_OWNER_ID },
+            { onConflict: "dedup_key,user_id", ignoreDuplicates: false }
+          )
+          .select()
+          .single();
 
         if (error) throw error;
 
