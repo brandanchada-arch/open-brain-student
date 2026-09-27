@@ -4,7 +4,8 @@
 //
 // 1. Generates an embedding (the thought's "meaning numbers") — Level 6
 // 2. Links it to its closest neighbors in the thought graph   — Level 6
-// 3. Adds tags, a category, and a one-sentence summary        — Level 5
+// 3. Chunks long captures into searchable pieces              — Level 8
+// 4. Adds tags, a category, and a one-sentence summary        — Level 5
 //
 // Every AI call goes through a gateway function (call-llm, generate-embedding).
 // This file never talks to an AI company directly, so switching providers
@@ -12,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { saveThoughtChunksSafe } from "../_shared/thought-chunks.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -183,6 +185,11 @@ Deno.serve(async (req) => {
         }
       }
       // No embedding? Keep going — the backfills can fill it in later.
+
+      // ── Level 8: chunk long captures ─────────────────────────
+      // Also runs BEFORE the skip checks, so a long capture always gets
+      // chunked. Does nothing under 2,000 characters, and never throws.
+      await saveThoughtChunksSafe(admin, record.id, content, "enrich-thought", "summary");
     }
 
     // ── Level 5: tags, category, summary ───────────────────────

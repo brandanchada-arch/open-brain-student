@@ -15,6 +15,9 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const MCP_ACCESS_KEY = Deno.env.get("MCP_ACCESS_KEY")!;
 // Whose brain this is. Every thought saved through MCP gets stamped with it.
 const BRAIN_OWNER_ID = Deno.env.get("BRAIN_OWNER_ID") ?? null;
+// Level 8: whose thoughts search is allowed to return. Same UID the
+// Telegram bot uses (Level 3).
+const OWNER_USER_ID = Deno.env.get("OWNER_USER_ID") ?? null;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -37,8 +40,11 @@ const TOOLS = [
   {
     name: "search_thoughts",
     description:
-      "Search stored thoughts by MEANING (semantic search). Finds related ideas even when " +
-      "they use different words than the query. Each result includes a similarity score " +
+      "Search stored thoughts by MEANING and by EXACT KEYWORDS at the same time (hybrid " +
+      "search). Finds related ideas even when they use different words than the query, and " +
+      "also finds exact names, numbers, and phrases. Long captures are searched paragraph " +
+      "by paragraph: when a result has 'matched_passage', that is the part of a longer " +
+      "capture that matched — quote it to the user. Each result includes a similarity score " +
       "from 0 to 1 (higher = closer in meaning), plus a 'connected' list: other thoughts " +
       "linked to it in the thought graph. Use the connected thoughts to surface related " +
       "ideas the user may have forgotten about.",
@@ -110,6 +116,17 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
 function preview(text: string) {
   const clean = String(text ?? "").replace(/\s+/g, " ").trim();
   return clean.length > PREVIEW_CHARS ? clean.slice(0, PREVIEW_CHARS) + "…" : clean;
+}
+
+// Level 8: a whole YouTube transcript can be 100,000+ characters. Sending
+// that back in every search floods the AI reading the results, so long
+// thoughts are cut off here. Their chunks carry the detail instead.
+const MAX_RESULT_CHARS = 3000;
+function truncateLong(text: string) {
+  const s = String(text ?? "");
+  return s.length > MAX_RESULT_CHARS
+    ? s.slice(0, MAX_RESULT_CHARS) + `… [truncated — ${s.length.toLocaleString()} characters total]`
+    : s;
 }
 
 // Level 6: for each search result, look up its links in the thought graph
@@ -216,7 +233,7 @@ Deno.serve(async (req) => {
         JSON.stringify(rpcResult(id, {
           protocolVersion: "2024-11-05",
           capabilities: { tools: {} },
-          serverInfo: { name: "open-brain-mcp", version: "1.2.0" },
+          serverInfo: { name: "open-brain-mcp", version: "1.3.0" },
         })),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -243,42 +260,47 @@ Deno.serve(async (req) => {
       if (toolName === "search_thoughts") {
         const query = String(args.query ?? "").trim();
 
-        // Level 6: semantic search. Turn the query into an embedding,
-        // then ask the database for the thoughts closest in meaning.
+        // Level 8: this function uses the service role key, so row-level
+        // security is NOT filtering for us. search_thoughts must be told
+        // whose thoughts to search. No owner configured = refuse to search,
+        // rather than risk searching everyone's thoughts.
+        if (!OWNER_USER_ID) {
+          throw new Error("OWNER_USER_ID is not set in Edge Function secrets");
+        }
+
+        // Level 8: hybrid search. Send the raw text (for keyword matching)
+        // AND its embedding (for meaning). If the embedding fails, it is
+        // left null and the database falls back to keyword-only on its own.
         const queryEmbedding = query ? await generateEmbedding(query) : null;
 
-        let results: any[];
-        let mode: string;
+        const { data, error } = await supabase.rpc("search_thoughts", {
+          query_text: query,
+          p_user_id: OWNER_USER_ID,
+          query_embedding: queryEmbedding,
+          match_threshold: 0.3,
+          match_count: 10,
+        });
+        if (error) throw error;
 
-        if (queryEmbedding) {
-          const { data, error } = await supabase.rpc("search_thoughts", {
-            query_embedding: queryEmbedding,
-            match_threshold: 0.3,
-            match_count: 10,
-          });
-          if (error) throw error;
+        const mode = queryEmbedding
+          ? "hybrid (meaning + keywords)"
+          : "keyword only (fallback: embeddings unavailable)";
 
-          mode = "semantic";
-          results = (data ?? []).map((r: any) => ({
-            id: r.id,
-            content: r.content,
-            created_at: r.created_at,
-            similarity: Math.round(r.similarity * 100) / 100,
-          }));
-        } else {
-          // Safety net: if embeddings are unavailable, fall back to
-          // plain keyword matching so search never breaks entirely.
-          const { data, error } = await supabase
-            .from("thoughts")
-            .select("id, content, created_at")
-            .ilike("content", `%${query}%`)
-            .order("created_at", { ascending: false })
-            .limit(10);
-          if (error) throw error;
-
-          mode = "keyword (fallback: embeddings unavailable)";
-          results = data ?? [];
-        }
+        let results: any[] = (data ?? []).map((r: any) => ({
+          id: r.id,
+          // When the match came from inside a long capture, show the
+          // paragraph that matched instead of the start of the document.
+          ...(r.matched_chunk
+            ? {
+                matched_passage: r.matched_chunk,
+                note: "(from partway through a longer capture)",
+                content_start: preview(r.content),
+              }
+            : { content: truncateLong(r.content) }),
+          created_at: r.created_at,
+          similarity: Math.round(r.similarity * 100) / 100,
+          match_source: r.match_source,
+        }));
 
         // Level 6: add each result's graph neighbors
         results = await attachConnections(results);

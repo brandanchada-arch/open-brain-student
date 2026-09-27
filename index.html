@@ -512,6 +512,26 @@ function renderThoughtCards(container, thoughts) {
   `).join('');
 }
 
+// Level 8: like renderThoughtCards, but when a result matched inside a long
+// capture, show the passage that matched under the start of the document.
+function renderSearchResults(container, results) {
+  if (!results || results.length === 0) {
+    container.innerHTML = '<div style="color:#777; text-align:center; padding:20px;">No matches.</div>';
+    return;
+  }
+  container.innerHTML = results.map(t => {
+    const long = t.content_length > 500;
+    return `
+    <div class="thought-card">
+      <div class="thought-meta">${new Date(t.created_at).toLocaleString()}</div>
+      <div class="thought-content">${escapeHtml(t.content.slice(0, t.matched_chunk ? 200 : 500))}${(t.matched_chunk ? t.content_length > 200 : long) ? '…' : ''}</div>
+      ${t.matched_chunk ? `
+      <div class="thought-meta" style="margin-top:10px;">Matched passage (from partway through a longer capture):</div>
+      <div class="thought-content" style="border-left:3px solid #444; padding-left:10px; color:#ccc;">${escapeHtml(t.matched_chunk)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
@@ -522,12 +542,14 @@ document.getElementById('searchBtn').addEventListener('click', async () => {
   const q = document.getElementById('searchInput').value.trim();
   const resultsEl = document.getElementById('searchResults');
   if (!q) return;
+  resultsEl.innerHTML = '<div style="color:#777; text-align:center; padding:20px;">Searching…</div>';
   try {
-    const { data, error } = await sb.from('thoughts')
-      .select('*').ilike('content', `%${q}%`)
-      .order('created_at', { ascending: false });
+    // Level 8: hybrid search (meaning + keywords + chunks) runs on the server,
+    // because it needs an embedding and the AI key can't live in this page.
+    const { data, error } = await sb.functions.invoke('search-brain', { body: { query: q, limit: 20 } });
     if (error) throw error;
-    renderThoughtCards(resultsEl, data);
+    if (!data?.ok) throw new Error(data?.error || 'Search failed.');
+    renderSearchResults(resultsEl, data.results);
   } catch (err) {
     resultsEl.innerHTML = `<div class="msg err">${err.message || 'Search failed.'}</div>`;
   }
