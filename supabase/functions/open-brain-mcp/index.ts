@@ -180,11 +180,14 @@ Deno.serve(async (req) => {
 
       if (toolName === "add_thought") {
         const content = args.content ?? "";
-        const { data, error } = await supabase
-          .from("thoughts")
-                    .insert({ content, user_id: BRAIN_OWNER_ID })
-          .select()
-          .single();
+            const { data, error } = await supabase
+      .from("thoughts")
+      .upsert(
+        { content, user_id: BRAIN_OWNER_ID },
+        { onConflict: "dedup_key,user_id", ignoreDuplicates: false }
+      )
+      .select()
+      .single();
 
         if (error) throw error;
 

@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
 
     const { data: saved, error: saveError } = await admin
       .from("thoughts")
-      .insert({
+      .upsert({
         content: `${heading}\n\n${llm.text.trim()}`,
         category: "digest",
         tags: ["weekly-digest"],
@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
           period_end: periodEnd.toISOString(),
           thought_count: thoughts.length,
         },
-      })
+      }, { onConflict: "dedup_key,user_id", ignoreDuplicates: false })
       .select("id")
       .single();
 

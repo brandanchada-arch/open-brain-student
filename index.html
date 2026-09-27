@@ -342,7 +342,7 @@ document.getElementById('voiceSaveBtn').addEventListener('click', async () => {
   const msgEl = document.getElementById('voiceMsg');
   if (!text) { showMsg(msgEl, 'Nothing to save yet.', false); return; }
   try {
-    const { error } = await sb.from('thoughts').insert({ content: text, user_id: currentUser.id });
+          const { error } = await sb.from('thoughts').upsert({ content: text, user_id: currentUser.id }, { onConflict: 'dedup_key,user_id', ignoreDuplicates: false });
     if (error) throw error;
     showMsg(msgEl, 'Saved!', true);
     document.getElementById('voiceTranscript').value = '';
@@ -393,7 +393,7 @@ document.getElementById('ytSaveBtn').addEventListener('click', async () => {
   try {
     const content = `📹 YouTube: ${currentYtTitle}\n\n${transcript}`;
     const { data: thought, error } = await sb.from('thoughts')
-      .insert({ content, user_id: currentUser.id, metadata: { video_id: currentYtId } })
+              .upsert({ content, user_id: currentUser.id, metadata: { video_id: currentYtId } }, { onConflict: 'dedup_key,user_id', ignoreDuplicates: false })
       .select().single();
     if (error) throw error;
     try {
@@ -472,7 +472,7 @@ document.getElementById('pdfSaveBtn').addEventListener('click', async () => {
   if (!text) { showMsg(msgEl, 'Nothing to save.', false); return; }
   try {
     const content = `📄 PDF: ${currentPdfName}\n\n${text}`;
-    const { error } = await sb.from('thoughts').insert({ content, user_id: currentUser.id });
+          const { error } = await sb.from('thoughts').upsert({ content, user_id: currentUser.id }, { onConflict: 'dedup_key,user_id', ignoreDuplicates: false });
     if (error) throw error;
     showMsg(msgEl, 'Saved!', true);
     document.getElementById('pdfText').value = '';

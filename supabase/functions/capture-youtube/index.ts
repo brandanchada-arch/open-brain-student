@@ -265,7 +265,7 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
     const { data: saved, error: insertError } = await admin
       .from("thoughts")
-      .insert({
+      .upsert({
         user_id: user.id,
         content,
         metadata: {
@@ -276,7 +276,7 @@ Deno.serve(async (req: Request) => {
           has_transcript: result.hasTranscript,
           fetched_via: result.source,
         },
-      })
+      }, { onConflict: "dedup_key,user_id", ignoreDuplicates: false })
       .select("id")
       .single();
 

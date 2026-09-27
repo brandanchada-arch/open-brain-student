@@ -87,9 +87,13 @@ Deno.serve(async (req: Request) => {
         await sendTelegramMessage(chatId, `Your last ${results.length} thought(s):\n\n${formatted}`);
       }
     } else {
-      // Save as a new thought
-            const res = await supabaseRequest("thoughts", {
+      // Save as a new thought. If the same content was already saved,
+      // update that row instead of creating a duplicate (Level 6, Step 0).
+      const res = await supabaseRequest("thoughts?on_conflict=dedup_key,user_id", {
         method: "POST",
+        headers: {
+          "Prefer": "resolution=merge-duplicates,return=representation",
+        },
         body: JSON.stringify({
           user_id: OWNER_USER_ID,
           content: text,
