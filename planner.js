@@ -1,6 +1,8 @@
 // Brain Calendar: the "Today / This week" page (Brain Calendar #25, #41, #13, #17, #9).
 // Tasks live in Brain Calendar's own tables (bc_tasks, bc_goals ...).
 // Google Calendar events come from the bc-calendar cloud function.
+// Milestone 2: plans waiting for your OK (#33), check-ins (#49), goals (#60),
+// and choosing how long a new item lasts (#59).
 // This file never reads or writes Open Brain thoughts.
 
 // ---------- Pure helpers (no page needed; tested in brain-calendar/tests) ----------
@@ -56,6 +58,7 @@ function plannerBuildView(tasks, events, view, now) {
       kind: 'task', id: t.id, title: t.title, done: t.status === 'done',
       start: t.scheduled_start, end: t.scheduled_end, due: t.due_at,
       goal: t.goal ? t.goal.name : null, allDay: false,
+      source: t.source || 'app', info: t.item_type === 'info', notes: t.notes || null,
     };
     if (!t.scheduled_start) {
       if (t.status === 'open' || doneToday(t)) tray.push(item);
@@ -103,36 +106,64 @@ function plannerFormToTask(title, goalId, date, time, blockMinutes) {
     row.scheduled_end = new Date(start.getTime() + (blockMinutes || 60) * 60000).toISOString();
   } else if (date) {
     row.due_at = new Date(`${date}T23:59`).toISOString();
+    row.item_type = 'due';
   }
   return row;
 }
 
+// Length choices for a new timed item (#59). The default (a setting) is always one of them.
+function plannerDurationOptions(defaultMinutes) {
+  const d = Number(defaultMinutes) > 0 ? Number(defaultMinutes) : 60;
+  const list = [15, 30, 45, 60, 90, 120, 180, 240];
+  if (!list.includes(d)) list.push(d);
+  const label = m => (m < 60 || m % 30 ? `${m} min` : m === 60 ? '1 hour' : `${m / 60} hours`);
+  return list.sort((a, b) => a - b).map(m => ({ value: m, label: label(m), selected: m === d }));
+}
+
+// Goal names typed in the app (#60): trimmed, not empty, no duplicates (any case).
+function plannerCleanGoalName(name, existing, exceptId) {
+  const n = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (!n) return { error: 'Type a name for the goal.' };
+  const clash = (existing || []).find(g => g.id !== exceptId && g.name.toLowerCase() === n.toLowerCase());
+  if (clash) return { error: `You already have a goal called "${clash.name}".` };
+  return { name: n };
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { plannerBuildView, plannerRange, plannerDayKey, plannerFormToTask };
+  module.exports = { plannerBuildView, plannerRange, plannerDayKey, plannerFormToTask, plannerDurationOptions, plannerCleanGoalName };
 }
 
 // ---------- The page ----------
 
 if (typeof document !== 'undefined') {
-  const P = { view: 'today', goals: [], settings: {}, ready: false, busy: false };
+  const P = { view: 'today', goals: [], allGoals: [], settings: {}, ready: false, busy: false, noteFor: null };
   const el = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const api = body => sb.functions.invoke('bc-calendar', { body });
 
   function plannerNote(html, kind) {
     el('plannerNotes').insertAdjacentHTML('beforeend', `<div class="msg ${kind || 'err'}">${html}</div>`);
   }
 
-  async function plannerSetup() {
-    const { error } = await sb.rpc('bc_seed_defaults', { p_app_url: location.origin.startsWith('https://') ? location.origin + location.pathname.replace(/index\.html$/, '') : null });
-    if (error) throw new Error('Brain Calendar tables are not set up yet. Run brain-calendar/sql/001_foundation.sql in the Supabase SQL Editor.');
-    const [{ data: goals }, { data: settings }] = await Promise.all([
-      sb.from('bc_goals').select('id,name').eq('active', true).order('sort_order'),
-      sb.from('bc_settings').select('key,value'),
-    ]);
-    P.goals = goals || [];
-    P.settings = Object.fromEntries((settings || []).map(s => [s.key, s.value]));
+  async function plannerLoadGoals() {
+    const { data } = await sb.from('bc_goals').select('id,name,active,sort_order').order('sort_order');
+    P.allGoals = data || [];
+    P.goals = P.allGoals.filter(g => g.active);
+    const keep = el('plannerGoal').value;
     el('plannerGoal').innerHTML = '<option value="">No goal</option>' +
       P.goals.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+    el('plannerGoal').value = P.goals.some(g => g.id === keep) ? keep : '';
+    plannerRenderGoals();
+  }
+
+  async function plannerSetup() {
+    const { error } = await sb.rpc('bc_seed_defaults', { p_app_url: location.origin.startsWith('https://') ? location.origin + location.pathname.replace(/index\.html$/, '') : null });
+    if (error) throw new Error('Brain Calendar tables are not set up yet. Run brain-calendar/sql/001_foundation.sql and 002_calendar_halo.sql in the Supabase SQL Editor.');
+    const { data: settings } = await sb.from('bc_settings').select('key,value');
+    P.settings = Object.fromEntries((settings || []).map(s => [s.key, s.value]));
+    el('plannerMinutes').innerHTML = plannerDurationOptions(P.settings.default_block_minutes)
+      .map(o => `<option value="${o.value}" ${o.selected ? 'selected' : ''}>${o.label}</option>`).join('');
+    await plannerLoadGoals();
     P.ready = true;
   }
 
@@ -148,11 +179,12 @@ if (typeof document !== 'undefined') {
       const tasksQ = sb.from('bc_tasks').select('*, goal:bc_goals(name)')
         .or(`status.eq.open,done_at.gte."${plannerStartOfDay(now).toISOString()}",and(scheduled_start.gte."${from.toISOString()}",scheduled_start.lt."${to.toISOString()}")`)
         .order('created_at');
-      const eventsQ = sb.functions.invoke('bc-calendar', { body: { action: 'events', from: from.toISOString(), to: to.toISOString() } })
-        .catch(err => ({ error: err }));
+      const eventsQ = api({ action: 'events', from: from.toISOString(), to: to.toISOString() }).catch(err => ({ error: err }));
       const costQ = sb.rpc('bc_cost_status');
+      const proposalsQ = sb.from('bc_proposals').select('id,kind,summary,created_at').eq('status', 'pending').in('kind', ['schedule', 'replan']).order('created_at');
+      const checkinsQ = sb.from('bc_checkins').select('id,title,block_start,block_end').is('answer', null).order('block_end', { ascending: false }).limit(10);
 
-      const [{ data: tasks, error: tErr }, ev, cost] = await Promise.all([tasksQ, eventsQ, costQ]);
+      const [{ data: tasks, error: tErr }, ev, cost, props, checks] = await Promise.all([tasksQ, eventsQ, costQ, proposalsQ, checkinsQ]);
       if (tErr) throw tErr;
 
       let events = [];
@@ -167,12 +199,13 @@ if (typeof document !== 'undefined') {
         plannerNote(`Heads up: projected cost this month is $${Number(c.projected_month).toFixed(2)}, above your $${Number(c.budget).toFixed(2)} budget.`);
       }
 
+      plannerRenderWaiting(props.data || [], checks.data || []);
       plannerRender(plannerBuildView(tasks || [], events, P.view, now));
 
       // Tasks with a time that aren't on the Brain calendar yet (e.g. added before Google was connected).
       if (ev.data?.connected && !ev.data.paused) {
         const pending = (tasks || []).filter(t => t.status === 'open' && t.scheduled_start && !t.google_event_id && new Date(t.scheduled_end) > now);
-        for (const t of pending) await sb.functions.invoke('bc-calendar', { body: { action: 'schedule-task', task_id: t.id } });
+        for (const t of pending) await api({ action: 'schedule-task', task_id: t.id });
       }
     } catch (err) {
       el('plannerTimeline').innerHTML = '';
@@ -183,18 +216,46 @@ if (typeof document !== 'undefined') {
     }
   }
 
+  // Plans waiting for a yes (#33) and check-ins waiting for an answer (#49).
+  function plannerRenderWaiting(props, checks) {
+    let html = '';
+    if (P.noteFor) {
+      const q = P.noteFor.answer === 'done' ? 'Anything worth noting? (optional)' : 'What happened? (optional)';
+      html += `<div class="pl-item"><div class="pl-body"><div class="pl-title">${esc(P.noteFor.title)}: ${q}</div>
+        <div class="row" style="margin-top:6px;"><input type="text" id="plannerNoteText" placeholder="A few words, or skip">
+        <button id="plannerNoteSave" style="flex:0 0 auto;">Save</button>
+        <button id="plannerNoteSkip" class="secondary" style="flex:0 0 auto;">Skip</button></div></div></div>`;
+    }
+    if (props.length) {
+      html += '<div class="pl-day">Waiting for your OK</div>' + props.map(p => `<div class="pl-item"><div class="pl-body">
+        <div class="pl-title">${esc(p.summary)}</div>
+        <div class="pl-actions"><button data-decide="${p.id}:approved">${p.kind === 'replan' ? 'Approve all' : 'Approve'}</button>
+        <button class="secondary" data-decide="${p.id}:not_now">Not now</button></div></div></div>`).join('');
+    }
+    if (checks.length) {
+      html += '<div class="pl-day">How did it go? <span style="text-transform:none; font-weight:400;">No rush</span></div>' + checks.map(c => `<div class="pl-item"><div class="pl-body">
+        <div class="pl-title">${esc(c.title)}</div>
+        <div class="pl-when">${c.block_start ? esc(new Date(c.block_start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' + plannerFmtTime(c.block_start) + '–' + plannerFmtTime(c.block_end)) : ''} · waiting</div>
+        <div class="pl-actions"><button data-checkin="${c.id}:done" data-title="${esc(c.title)}">Yes, I did it</button>
+        <button class="secondary" data-checkin="${c.id}:not_done" data-title="${esc(c.title)}">I didn't do it</button></div></div></div>`).join('');
+    }
+    el('plannerWaiting').innerHTML = html;
+  }
+
   function plannerItemHtml(i, showDate) {
     const when = i.allDay ? 'All day'
       : i.start ? `${showDate ? new Date(i.start).toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' : ''}${plannerFmtTime(i.start)}${i.end ? '–' + plannerFmtTime(i.end) : ''}`
       : i.due ? `due ${new Date(i.due).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}` : '';
     const goal = i.goal ? `<span class="pl-chip">${esc(i.goal)}</span>` : '';
+    const src = i.source === 'halo' ? '<span class="pl-chip">Halo</span>' : '';
     const cal = i.kind === 'event' ? `<span class="pl-chip ${i.calendar === 'brain' ? 'brain' : ''}">${i.calendar === 'brain' ? 'Brain' : 'Calendar'}</span>` : '';
     const box = i.kind === 'task'
       ? `<input type="checkbox" class="pl-check" data-id="${i.id}" ${i.done ? 'checked' : ''} aria-label="Done">`
       : '<span class="pl-dot"></span>';
+    const notes = i.info && i.notes ? `<div class="pl-when">${esc(i.notes.slice(0, 160))}${i.notes.length > 160 ? '…' : ''}</div>` : '';
     return `<div class="pl-item ${i.done ? 'done' : ''}">${box}
       <div class="pl-body"><div class="pl-title">${esc(i.title)}</div>
-      <div class="pl-when">${esc(when)} ${goal}${cal}</div></div></div>`;
+      <div class="pl-when">${esc(when)} ${goal}${src}${cal}</div>${notes}</div></div>`;
   }
 
   function plannerRender(v) {
@@ -210,11 +271,60 @@ if (typeof document !== 'undefined') {
     el('plannerTray').innerHTML = v.tray.length ? v.tray.map(i => plannerItemHtml(i)).join('') : '<div class="pl-empty">All caught up.</div>';
   }
 
+  // Goals: add, rename, show/hide (#17, #60). Hidden goals stay on old items.
+  function plannerRenderGoals() {
+    el('plannerGoalList').innerHTML = P.allGoals.map(g => `<div class="row" style="margin-top:6px; align-items:center;">
+      <input type="text" value="${esc(g.name)}" data-goal-name="${g.id}" aria-label="Goal name">
+      <label style="flex:0 0 auto; margin:0; display:flex; gap:4px; align-items:center;"><input type="checkbox" data-goal-active="${g.id}" ${g.active ? 'checked' : ''} style="width:auto;"> show</label>
+      <button class="secondary" data-goal-save="${g.id}" style="flex:0 0 auto;">Save</button></div>`).join('');
+  }
+
+  async function plannerSaveGoal(id) {
+    const name = document.querySelector(`[data-goal-name="${id}"]`).value;
+    const active = document.querySelector(`[data-goal-active="${id}"]`).checked;
+    const clean = plannerCleanGoalName(name, P.allGoals, id);
+    if (clean.error) { el('plannerGoalMsg').innerHTML = `<div class="msg err">${esc(clean.error)}</div>`; return; }
+    const { error } = await sb.from('bc_goals').update({ name: clean.name, active }).eq('id', id);
+    el('plannerGoalMsg').innerHTML = error ? `<div class="msg err">${esc(error.message)}</div>` : '<div class="msg ok">Saved.</div>';
+    await plannerLoadGoals();
+  }
+
+  async function plannerAddGoal() {
+    const clean = plannerCleanGoalName(el('plannerNewGoal').value, P.allGoals);
+    if (clean.error) { el('plannerGoalMsg').innerHTML = `<div class="msg err">${esc(clean.error)}</div>`; return; }
+    const order = Math.max(0, ...P.allGoals.map(g => g.sort_order || 0)) + 1;
+    const { error } = await sb.from('bc_goals').insert({ name: clean.name, sort_order: order, user_id: currentUser.id });
+    el('plannerGoalMsg').innerHTML = error ? `<div class="msg err">${esc(error.message)}</div>` : '<div class="msg ok">Goal added.</div>';
+    if (!error) el('plannerNewGoal').value = '';
+    await plannerLoadGoals();
+  }
+
   async function plannerToggle(id, done) {
-    const { error } = await sb.from('bc_tasks')
-      .update({ status: done ? 'done' : 'open', done_at: done ? new Date().toISOString() : null })
-      .eq('id', id);
-    if (error) plannerNote(esc(error.message));
+    // Through the server, so finishing early also frees the rest of the block (#39).
+    const { data, error } = await api({ action: 'set-done', task_id: id, done });
+    if (error || !data?.ok) plannerNote('Could not save that. Try again.');
+    plannerLoad();
+  }
+
+  async function plannerDecide(id, decision) {
+    const { data, error } = await api({ action: 'decide', proposal_id: id, decision });
+    if (error || !data?.ok) plannerNote('Could not save that. Try again.');
+    else if (data.result === 'stale') plannerNote(esc(data.text), 'ok');
+    plannerLoad();
+  }
+
+  async function plannerCheckin(id, answer, title) {
+    const { data, error } = await api({ action: 'checkin', checkin_id: id, answer });
+    if (error || !data?.ok) { plannerNote('Could not save that. Try again.'); return; }
+    P.noteFor = { id, answer, title };
+    plannerLoad();
+  }
+
+  async function plannerSaveNote() {
+    const note = el('plannerNoteText').value.trim();
+    const f = P.noteFor;
+    P.noteFor = null;
+    if (note && f) await api({ action: 'checkin-note', checkin_id: f.id, note });
     plannerLoad();
   }
 
@@ -222,13 +332,13 @@ if (typeof document !== 'undefined') {
     const title = el('plannerTitle').value;
     if (!title.trim()) return;
     const row = plannerFormToTask(title, el('plannerGoal').value, el('plannerDate').value, el('plannerTime').value,
-      Number(P.settings.default_block_minutes) || 60);
+      Number(el('plannerMinutes').value) || Number(P.settings.default_block_minutes) || 60);
     const { data, error } = await sb.from('bc_tasks').insert({ ...row, user_id: currentUser.id }).select().single();
     if (error) { plannerNote(esc(error.message)); return; }
     el('plannerTitle').value = ''; el('plannerTime').value = ''; el('plannerDate').value = '';
     if (data.scheduled_start) {
       // Brandan typed the time himself, so this is his "yes" (#43). Put it on the Brain calendar (#23).
-      await sb.functions.invoke('bc-calendar', { body: { action: 'schedule-task', task_id: data.id } }).catch(() => {});
+      await api({ action: 'schedule-task', task_id: data.id }).catch(() => {});
     }
     plannerLoad();
   }
@@ -237,14 +347,24 @@ if (typeof document !== 'undefined') {
     if (e.target.classList && e.target.classList.contains('pl-check')) plannerToggle(e.target.dataset.id, e.target.checked);
   });
   document.addEventListener('click', e => {
+    const d = e.target.dataset || {};
     if (e.target.id === 'plannerAddBtn') plannerAdd();
-    if (e.target.dataset && e.target.dataset.view) {
-      P.view = e.target.dataset.view;
+    if (e.target.id === 'plannerNoteSave') plannerSaveNote();
+    if (e.target.id === 'plannerNoteSkip') { P.noteFor = null; plannerLoad(); }
+    if (e.target.id === 'plannerAddGoal') plannerAddGoal();
+    if (d.goalSave) plannerSaveGoal(d.goalSave);
+    if (d.decide) { const [id, decision] = d.decide.split(':'); plannerDecide(id, decision); }
+    if (d.checkin) { const [id, answer] = d.checkin.split(':'); plannerCheckin(id, answer, d.title); }
+    if (d.view) {
+      P.view = d.view;
       document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('secondary', b.dataset.view !== P.view));
       plannerLoad();
     }
   });
-  document.addEventListener('keydown', e => { if (e.target.id === 'plannerTitle' && e.key === 'Enter') plannerAdd(); });
+  document.addEventListener('keydown', e => {
+    if (e.target.id === 'plannerTitle' && e.key === 'Enter') plannerAdd();
+    if (e.target.id === 'plannerNoteText' && e.key === 'Enter') plannerSaveNote();
+  });
 
   window.loadPlanner = plannerLoad;
 }

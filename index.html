@@ -92,6 +92,8 @@
   .pl-chip { display: inline-block; font-size: 11px; background: #23234a; color: #a5b4fc; border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
   .pl-chip.brain { background: #3b2a12; color: #fbbf24; }
   .pl-empty { color: #666; font-size: 13px; padding: 4px 2px 8px; }
+  .pl-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .pl-actions button { padding: 8px 12px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -134,6 +136,7 @@
       <button data-view="week" class="secondary">This week</button>
     </div>
     <div id="plannerNotes"></div>
+    <div id="plannerWaiting"></div>
     <div id="plannerTimeline"></div>
     <div class="pl-day">Not scheduled yet</div>
     <div id="plannerTray"></div>
@@ -144,10 +147,23 @@
         <input type="date" id="plannerDate" aria-label="Date">
         <input type="time" id="plannerTime" aria-label="Time (optional)">
       </div>
-      <select id="plannerGoal" style="margin-top:8px;" aria-label="Goal"></select>
-      <div style="font-size:12px; color:#777; margin-top:6px;">With a time it goes on your timeline and Brain calendar. Date only = due date. No date = "Not scheduled yet".</div>
+      <div class="row" style="margin-top:8px;">
+        <select id="plannerGoal" aria-label="Goal"></select>
+        <select id="plannerMinutes" aria-label="How long"></select>
+      </div>
+      <div style="font-size:12px; color:#777; margin-top:6px;">With a time it goes on your timeline and Brain calendar for the length you pick. Date only = due date. No date = "Not scheduled yet".</div>
       <button id="plannerAddBtn" style="width:100%; margin-top:10px;">Add</button>
     </div>
+    <details class="card">
+      <summary style="cursor:pointer; font-size:13px; color:#999;">Goals</summary>
+      <div id="plannerGoalList"></div>
+      <div class="row" style="margin-top:10px;">
+        <input type="text" id="plannerNewGoal" placeholder="New goal, e.g. Fitness">
+        <button id="plannerAddGoal" style="flex:0 0 auto;">Add goal</button>
+      </div>
+      <div style="font-size:12px; color:#777; margin-top:6px;">Untick "show" to hide a goal from the list. Items already tagged keep it.</div>
+      <div id="plannerGoalMsg"></div>
+    </details>
   </div>
 
   <div class="panel" id="panel-voice">

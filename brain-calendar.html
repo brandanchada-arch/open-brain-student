@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brain Calendar</title>
+<meta name="description" content="Brain Calendar is a personal planning tool that one person, Brandan Chada, built for his own use.">
+<style>
+  :root { --bg: #ffffff; --text: #1a1a1a; --muted: #555; --link: #4f46e5; --line: #e5e5e5; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0f0f0f; --text: #eaeaea; --muted: #a3a3a3; --link: #a5b4fc; --line: #2a2a2a; } }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 18px; margin: 28px 0 8px; }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); }
+  a { color: var(--link); }
+  footer { border-top: 1px solid var(--line); margin-top: 32px; padding-top: 16px; font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Brain Calendar</h1>
+  <p class="muted">A personal planning tool, built by Brandan Chada for his own use.</p>
+
+  <h2>What it does</h2>
+  <ul>
+    <li>Shows Brandan's classes and appointments from his Google Calendar next to his to-do list, in one "Today" and "This week" view.</li>
+    <li>Suggests times for study blocks and tasks, and adds them only after Brandan approves.</li>
+    <li>Puts everything it adds on a separate calendar called "Brain" in Brandan's own Google account, never on his main calendar.</li>
+    <li>Sends Brandan short reminders, check-ins and a morning summary through a private Telegram bot.</li>
+  </ul>
+
+  <h2>Who can use it</h2>
+  <p>Brain Calendar is not a public service. It has one user: its owner, Brandan Chada. It only works with his own Google account and his own data. Nobody else can sign up or sign in.</p>
+
+  <h2>Privacy</h2>
+  <p>Read the <a href="privacy.html">privacy policy</a> to see what data Brain Calendar uses, where it is stored and how to remove it.</p>
+
+  <footer>
+    Contact: <a href="mailto:brandanchada@gmail.com">brandanchada@gmail.com</a>
+  </footer>
+</main>
+</body>
+</html>

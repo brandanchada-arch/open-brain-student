@@ -8,6 +8,9 @@ explain changes in plain language.
 ## Where things run
 - **Web app**: `index.html` (the whole app, one file) + `config.js` (Supabase URL + publishable key).
   Hosted on Vercel, which redeploys automatically on every push to `master`.
+- **Brain Calendar pages** (code and docs live in `C:\Users\josep\brain-calendar`): `planner.js` is the
+  Today tab; `brain-calendar.html` and `privacy.html` are public pages for Google's sign-in screen
+  (https://open-brain-student-vert.vercel.app/brain-calendar.html and /privacy.html). Keep them reachable without login.
 - **Database + functions**: Supabase project ref `zqbjxbdborfahsomluye`.
 - **Keep-alive**: `.github/workflows/keep-alive.yml` pings the DB twice a week so the free project doesn't pause.
 
