@@ -79,6 +79,19 @@
   .row > * { flex: 1; }
   .progress-bar { height: 6px; background: #2a2a2a; border-radius: 999px; overflow: hidden; margin-top: 8px; }
   .progress-fill { height: 100%; background: #6366f1; transition: width 0.2s; }
+  /* Brain Calendar: Today / This week (planner.js) */
+  select { background: #161616; border: 1px solid #2a2a2a; color: #eaeaea; border-radius: 10px; padding: 10px 12px; font-size: 14px; font-family: inherit; width: 100%; }
+  .pl-day { font-size: 12px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.04em; margin: 16px 0 8px; }
+  .pl-item { display: flex; gap: 10px; align-items: flex-start; background: #161616; border: 1px solid #2a2a2a; border-radius: 12px; padding: 10px 12px; margin-bottom: 6px; }
+  .pl-item.done .pl-title { text-decoration: line-through; color: #777; }
+  .pl-check { width: 20px; height: 20px; margin: 2px 0 0; flex: 0 0 auto; accent-color: #6366f1; }
+  .pl-dot { width: 10px; height: 10px; border-radius: 50%; background: #444; margin: 6px 5px 0; flex: 0 0 auto; }
+  .pl-body { flex: 1; min-width: 0; }
+  .pl-title { font-size: 14px; word-break: break-word; }
+  .pl-when { font-size: 12px; color: #888; margin-top: 2px; }
+  .pl-chip { display: inline-block; font-size: 11px; background: #23234a; color: #a5b4fc; border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
+  .pl-chip.brain { background: #3b2a12; color: #fbbf24; }
+  .pl-empty { color: #666; font-size: 13px; padding: 4px 2px 8px; }
 </style>
 </head>
 <body>
@@ -106,7 +119,8 @@
   </div>
 
   <div class="tabs">
-    <div class="tab active" data-tab="voice">🎙️ Voice</div>
+    <div class="tab active" data-tab="today">📅 Today</div>
+    <div class="tab" data-tab="voice">🎙️ Voice</div>
     <div class="tab" data-tab="youtube">▶️ YouTube</div>
     <div class="tab" data-tab="pdf">📄 PDF</div>
     <div class="tab" data-tab="url">🔗 URL</div>
@@ -114,7 +128,29 @@
     <div class="tab" data-tab="recent">🕐 Recent</div>
   </div>
 
-  <div class="panel active" id="panel-voice">
+  <div class="panel active" id="panel-today">
+    <div class="row" style="margin-bottom:8px;">
+      <button data-view="today">Today</button>
+      <button data-view="week" class="secondary">This week</button>
+    </div>
+    <div id="plannerNotes"></div>
+    <div id="plannerTimeline"></div>
+    <div class="pl-day">Not scheduled yet</div>
+    <div id="plannerTray"></div>
+    <div class="card" style="margin-top:16px;">
+      <label style="margin-top:0;">Add to your list</label>
+      <input type="text" id="plannerTitle" placeholder="e.g. Finish FIN 450 case study">
+      <div class="row" style="margin-top:8px;">
+        <input type="date" id="plannerDate" aria-label="Date">
+        <input type="time" id="plannerTime" aria-label="Time (optional)">
+      </div>
+      <select id="plannerGoal" style="margin-top:8px;" aria-label="Goal"></select>
+      <div style="font-size:12px; color:#777; margin-top:6px;">With a time it goes on your timeline and Brain calendar. Date only = due date. No date = "Not scheduled yet".</div>
+      <button id="plannerAddBtn" style="width:100%; margin-top:10px;">Add</button>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-voice">
     <div class="card">
       <div class="mic-wrap">
         <button class="mic-btn" id="micBtn">🎙️</button>
@@ -197,6 +233,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="planner.js"></script>
 <script>
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUser = null;
@@ -263,6 +300,8 @@ sb.auth.onAuthStateChange((event, session) => {
     document.getElementById('app').style.display = 'block';
     checkConnection();
     loadRecent();
+    if (location.hash === '#today') showTab('today');
+    if (document.getElementById('panel-today').classList.contains('active')) loadPlanner();
   } else {
     currentUser = null;
     document.getElementById('authScreen').style.display = 'block';
@@ -280,13 +319,17 @@ async function checkConnection() {
   }
 }
 
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+}
+
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    showTab(tab.dataset.tab);
     if (tab.dataset.tab === 'recent') loadRecent();
+    if (tab.dataset.tab === 'today') loadPlanner();
   });
 });
 
