@@ -45,7 +45,7 @@ Anything importing `_shared/` must be redeployed when `_shared/` changes (`enric
   `create or replace` with a new parameter list makes a second overload and every call fails
   with "function ... is not unique".
 - **Service role bypasses RLS.** Any function using `SUPABASE_SERVICE_ROLE_KEY` must filter by
-  user itself (`p_user_id` / `.eq("user_id", ...)`). Known gap: `list_recent` in `open-brain-mcp` doesn't yet.
+  user itself (`p_user_id` / `.eq("user_id", ...)`).
 - **Never trust a user id from a request body** — get it from the caller's token (`auth.getUser()` with the anon client), as `capture-url` and `search-brain` do.
 - **Some thoughts are huge** (100k+ chars YouTube transcripts). Never return full `content` in bulk; search results are capped at 3,000 chars.
 - **Embedding calls can be rate-limited** during bulk jobs; chunks save with a null embedding and `backfill-chunks` with `{"fill_embeddings": true}` repairs them.

@@ -314,10 +314,17 @@ Deno.serve(async (req) => {
       }
 
       if (toolName === "list_recent") {
+        // Same rule as search_thoughts: the service role skips row-level
+        // security, so filter to the owner ourselves, and refuse if unset.
+        if (!OWNER_USER_ID) {
+          throw new Error("OWNER_USER_ID is not set in Edge Function secrets");
+        }
+
         const limit = args.limit ?? 10;
         const { data, error } = await supabase
           .from("thoughts")
           .select("id, content, created_at")
+          .eq("user_id", OWNER_USER_ID)
           .order("created_at", { ascending: false })
           .limit(limit);
 
