@@ -122,6 +122,7 @@
 
   <div class="tabs">
     <div class="tab active" data-tab="today">📅 Today</div>
+    <div class="tab" data-tab="jobs">💼 Jobs</div>
     <div class="tab" data-tab="voice">🎙️ Voice</div>
     <div class="tab" data-tab="youtube">▶️ YouTube</div>
     <div class="tab" data-tab="pdf">📄 PDF</div>
@@ -164,6 +165,12 @@
       <div style="font-size:12px; color:#777; margin-top:6px;">Untick "show" to hide a goal from the list. Items already tagged keep it.</div>
       <div id="plannerGoalMsg"></div>
     </details>
+  </div>
+
+  <div class="panel" id="panel-jobs">
+    <div id="jobsNotes"></div>
+    <div id="jobsList"></div>
+    <div id="jobsCost" style="font-size:12px; color:#777; margin-top:12px;"></div>
   </div>
 
   <div class="panel" id="panel-voice">
@@ -250,6 +257,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="planner.js"></script>
+<script src="jobs.js"></script>
 <script>
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUser = null;
@@ -317,6 +325,7 @@ sb.auth.onAuthStateChange((event, session) => {
     checkConnection();
     loadRecent();
     if (location.hash === '#today') showTab('today');
+    if (location.hash === '#jobs') { showTab('jobs'); loadJobs(); }
     if (document.getElementById('panel-today').classList.contains('active')) loadPlanner();
   } else {
     currentUser = null;
@@ -346,6 +355,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     showTab(tab.dataset.tab);
     if (tab.dataset.tab === 'recent') loadRecent();
     if (tab.dataset.tab === 'today') loadPlanner();
+    if (tab.dataset.tab === 'jobs') loadJobs();
   });
 });
 

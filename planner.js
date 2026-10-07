@@ -192,7 +192,7 @@ if (typeof document !== 'undefined') {
         .order('created_at');
       const eventsQ = api({ action: 'events', from: from.toISOString(), to: to.toISOString() }).catch(err => ({ error: err }));
       const costQ = sb.rpc('bc_cost_status');
-      const proposalsQ = sb.from('bc_proposals').select('id,kind,summary,created_at').eq('status', 'pending').in('kind', ['schedule', 'replan']).order('created_at');
+      const proposalsQ = sb.from('bc_proposals').select('id,kind,summary,created_at').eq('status', 'pending').in('kind', ['schedule', 'replan', 'interview']).order('created_at');
       const checkinsQ = sb.from('bc_checkins').select('id,title,block_start,block_end').is('answer', null).order('block_end', { ascending: false }).limit(10);
 
       const [{ data: tasks, error: tErr }, ev, cost, props, checks] = await Promise.all([tasksQ, eventsQ, costQ, proposalsQ, checkinsQ]);
