@@ -3,6 +3,7 @@
 // Google Calendar events come from the bc-calendar cloud function.
 // Milestone 2: plans waiting for your OK (#33), check-ins (#49), goals (#60),
 // and choosing how long a new item lasts (#59).
+// "Schedule" puts an item from "Not scheduled yet" on the calendar without retyping it.
 // This file never reads or writes Open Brain thoughts.
 
 // ---------- Pure helpers (no page needed; tested in brain-calendar/tests) ----------
@@ -111,6 +112,16 @@ function plannerFormToTask(title, goalId, date, time, blockMinutes) {
   return row;
 }
 
+// "Schedule" on an unscheduled item: day + time + length -> the block's times, or an error to show.
+function plannerScheduleTimes(date, time, minutes, now) {
+  if (!date || !time) return { error: 'Pick a day and a time.' };
+  const start = new Date(`${date}T${time}`);
+  if (isNaN(start)) return { error: 'Pick a day and a time.' };
+  if (start.getTime() < new Date(now).getTime() - 5 * 60000) return { error: 'That time has already passed.' };
+  const end = new Date(start.getTime() + (Number(minutes) > 0 ? Number(minutes) : 60) * 60000);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
 // Length choices for a new timed item (#59). The default (a setting) is always one of them.
 function plannerDurationOptions(defaultMinutes) {
   const d = Number(defaultMinutes) > 0 ? Number(defaultMinutes) : 60;
@@ -130,13 +141,13 @@ function plannerCleanGoalName(name, existing, exceptId) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { plannerBuildView, plannerRange, plannerDayKey, plannerFormToTask, plannerDurationOptions, plannerCleanGoalName };
+  module.exports = { plannerBuildView, plannerRange, plannerDayKey, plannerFormToTask, plannerScheduleTimes, plannerDurationOptions, plannerCleanGoalName };
 }
 
 // ---------- The page ----------
 
 if (typeof document !== 'undefined') {
-  const P = { view: 'today', goals: [], allGoals: [], settings: {}, ready: false, busy: false, noteFor: null };
+  const P = { view: 'today', goals: [], allGoals: [], settings: {}, ready: false, busy: false, noteFor: null, tray: [], schedFor: null };
   const el = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const api = body => sb.functions.invoke('bc-calendar', { body });
@@ -242,7 +253,7 @@ if (typeof document !== 'undefined') {
     el('plannerWaiting').innerHTML = html;
   }
 
-  function plannerItemHtml(i, showDate) {
+  function plannerItemHtml(i, showDate, inTray) {
     const when = i.allDay ? 'All day'
       : i.start ? `${showDate ? new Date(i.start).toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' : ''}${plannerFmtTime(i.start)}${i.end ? '–' + plannerFmtTime(i.end) : ''}`
       : i.due ? `due ${new Date(i.due).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}` : '';
@@ -253,9 +264,43 @@ if (typeof document !== 'undefined') {
       ? `<input type="checkbox" class="pl-check" data-id="${i.id}" ${i.done ? 'checked' : ''} aria-label="Done">`
       : '<span class="pl-dot"></span>';
     const notes = i.info && i.notes ? `<div class="pl-when">${esc(i.notes.slice(0, 160))}${i.notes.length > 160 ? '…' : ''}</div>` : '';
+    const sched = inTray && i.kind === 'task' && !i.done ? plannerScheduleHtml(i) : '';
     return `<div class="pl-item ${i.done ? 'done' : ''}">${box}
       <div class="pl-body"><div class="pl-title">${esc(i.title)}</div>
-      <div class="pl-when">${esc(when)} ${goal}${src}${cal}</div>${notes}</div></div>`;
+      <div class="pl-when">${esc(when)} ${goal}${src}${cal}</div>${notes}${sched}</div></div>`;
+  }
+
+  // The "Schedule" button, or (once tapped) day / time / length to put it on the calendar.
+  function plannerScheduleHtml(i) {
+    if (P.schedFor !== i.id) {
+      return `<div class="pl-actions"><button class="secondary" data-schedule="${i.id}">Schedule</button></div>`;
+    }
+    const lengths = plannerDurationOptions(P.settings.default_block_minutes)
+      .map(o => `<option value="${o.value}" ${o.selected ? 'selected' : ''}>${o.label}</option>`).join('');
+    return `<div class="row" style="margin-top:8px;">
+        <input type="date" id="plannerSchedDate" value="${plannerDayKey(new Date())}" aria-label="Day">
+        <input type="time" id="plannerSchedTime" aria-label="Time">
+        <select id="plannerSchedMinutes" aria-label="How long">${lengths}</select></div>
+      <div id="plannerSchedMsg"></div>
+      <div class="pl-actions"><button data-sched-save="${i.id}">Put on calendar</button>
+        <button class="secondary" data-sched-cancel="1">Cancel</button></div>`;
+  }
+
+  function plannerRenderTray() {
+    el('plannerTray').innerHTML = P.tray.length ? P.tray.map(i => plannerItemHtml(i, false, true)).join('') : '<div class="pl-empty">All caught up.</div>';
+  }
+
+  async function plannerSchedule(id) {
+    const t = plannerScheduleTimes(el('plannerSchedDate').value, el('plannerSchedTime').value, el('plannerSchedMinutes').value, new Date());
+    if (t.error) { el('plannerSchedMsg').innerHTML = `<div class="msg err">${esc(t.error)}</div>`; return; }
+    // Through the server, so a suggestion still waiting for this item is closed too.
+    const { data, error } = await api({ action: 'set-time', task_id: id, start: t.start, end: t.end });
+    if (error || !data?.ok) {
+      el('plannerSchedMsg').innerHTML = `<div class="msg err">${data?.error === 'time_passed' ? 'That time has already passed.' : 'Could not save that. Try again.'}</div>`;
+      return;
+    }
+    P.schedFor = null;
+    plannerLoad();
   }
 
   function plannerRender(v) {
@@ -268,7 +313,9 @@ if (typeof document !== 'undefined') {
       html += d.items.length ? d.items.map(i => plannerItemHtml(i)).join('') : '<div class="pl-empty">Nothing scheduled.</div>';
     }
     el('plannerTimeline').innerHTML = html;
-    el('plannerTray').innerHTML = v.tray.length ? v.tray.map(i => plannerItemHtml(i)).join('') : '<div class="pl-empty">All caught up.</div>';
+    P.tray = v.tray;
+    if (!P.tray.some(i => i.id === P.schedFor && !i.done)) P.schedFor = null;
+    plannerRenderTray();
   }
 
   // Goals: add, rename, show/hide (#17, #60). Hidden goals stay on old items.
@@ -353,6 +400,9 @@ if (typeof document !== 'undefined') {
     if (e.target.id === 'plannerNoteSkip') { P.noteFor = null; plannerLoad(); }
     if (e.target.id === 'plannerAddGoal') plannerAddGoal();
     if (d.goalSave) plannerSaveGoal(d.goalSave);
+    if (d.schedule) { P.schedFor = d.schedule; plannerRenderTray(); el('plannerSchedTime').focus(); }
+    if (d.schedCancel) { P.schedFor = null; plannerRenderTray(); }
+    if (d.schedSave) plannerSchedule(d.schedSave);
     if (d.decide) { const [id, decision] = d.decide.split(':'); plannerDecide(id, decision); }
     if (d.checkin) { const [id, answer] = d.checkin.split(':'); plannerCheckin(id, answer, d.title); }
     if (d.view) {
