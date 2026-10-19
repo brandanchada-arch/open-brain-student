@@ -1,11 +1,13 @@
 {
+  "id": "./",
   "name": "My Open Brain",
   "short_name": "Open Brain",
-  "start_url": "./",
+  "start_url": "./#today",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0f0f0f",
-  "theme_color": "#6366f1",
+  "orientation": "portrait",
+  "background_color": "#1A1917",
+  "theme_color": "#1A1917",
   "icons": [
     {
       "src": "icon-192.png",

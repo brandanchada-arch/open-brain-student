@@ -2,136 +2,278 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- No pinch/double-tap zoom, content under the notch handled with safe-area padding -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>My Open Brain</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#6366f1">
+<meta name="theme-color" content="#1A1917">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Open Brain">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Pinned version so the offline copy never goes stale or changes under us -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
 <script src="config.js"></script>
 <style>
-  * { box-sizing: border-box; }
+  /* ---------- Design C: Capture First ---------- */
+  :root {
+    --bg: #1A1917; --surface: #26241F; --surface-2: #1F1D19; --raised: #2C2A25;
+    --line: #36332C; --line-2: #3A372F;
+    --text: #F3EFE8; --muted: #A8A196; --faint: #8A8478;
+    --accent: #F2A541; --accent-ink: #1A1917; --accent-soft: #3A2C17;
+    --blue: #9DB8FF; --teal: #6FD6C0; --ok: #4ADE80; --err: #F87171;
+    --display: 'Bricolage Grotesque', -apple-system, system-ui, sans-serif;
+    --body: Figtree, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --nav-h: 64px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; background: var(--bg); }
   body {
-    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: #0f0f0f; color: #eaeaea; min-height: 100vh;
+    margin: 0; font-family: var(--body); background: var(--bg); color: var(--text);
+    min-height: 100vh; min-height: 100dvh; overscroll-behavior-y: none;
+    -webkit-font-smoothing: antialiased;
   }
-  .container { max-width: 640px; margin: 0 auto; padding: 16px; }
-  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; }
-  .brand { font-weight: 700; font-size: 18px; display: flex; align-items: center; gap: 8px; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: #555; }
-  .dot.on { background: #22c55e; }
-  .dot.off { background: #ef4444; }
+  h1, h2 { font-family: var(--display); letter-spacing: -0.02em; margin: 0; }
+
+  /* Buttons: 44px+ tap targets, press feedback */
   button {
-    background: #6366f1; color: white; border: none; border-radius: 10px;
-    padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
+    font-family: inherit; font-size: 16px; font-weight: 700; border: 0; cursor: pointer;
+    min-height: 48px; padding: 0 20px; border-radius: 16px;
+    background: var(--accent); color: var(--accent-ink);
+    transition: transform .12s ease, opacity .12s ease;
   }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  button.secondary { background: #2a2a2a; color: #eaeaea; }
-  button.danger { background: #7f1d1d; }
-  input, textarea {
-    width: 100%; background: #161616; border: 1px solid #2a2a2a; color: #eaeaea;
-    border-radius: 10px; padding: 10px 12px; font-size: 14px; font-family: inherit;
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+  button.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--line-2); font-weight: 600; }
+  button.danger { background: #4A1F1A; color: #FCA5A5; }
+  .icon-btn { width: 48px; min-width: 48px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+
+  /* Inputs: 16px+ text so iOS never zooms on focus */
+  input, textarea, select {
+    width: 100%; font-family: inherit; font-size: 16px; color: var(--text);
+    background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 14px;
+    padding: 12px 14px; min-height: 48px; outline: none; -webkit-appearance: none; appearance: none;
   }
-  textarea { resize: vertical; min-height: 100px; }
-  .card {
-    background: #161616; border: 1px solid #2a2a2a; border-radius: 14px;
-    padding: 16px; margin-bottom: 12px;
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  input[type="checkbox"] { -webkit-appearance: auto; appearance: auto; min-height: 0; }
+  textarea { resize: none; min-height: 110px; line-height: 1.45; }
+  select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 20px) 21px, calc(100% - 15px) 21px; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 36px; }
+  ::placeholder { color: var(--faint); }
+  label { font-size: 13px; color: var(--muted); display: block; margin: 14px 0 6px; font-weight: 500; }
+  a { color: #F2B35E; }
+
+  /* ---------- Layout ---------- */
+  .container { max-width: 560px; margin: 0 auto; padding: 0 20px; }
+  #app { padding-top: calc(var(--safe-top) + 20px); padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 40px); }
+  .screen { display: none; }
+  .screen.active { display: block; animation: fadein .18s ease; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .screen-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; min-height: 48px; }
+  .screen-head h1 { font-size: 30px; font-weight: 700; line-height: 1.1; }
+  .section-title { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; font-weight: 700; margin: 26px 0 10px; }
+  .section-title a, .section-title button.linkish { font-size: 14px; font-weight: 500; }
+  .linkish { background: none; color: #F2B35E; min-height: 44px; padding: 0 4px; font-weight: 500; }
+
+  /* Segmented chips (Capture modes, Study modes, Today/Week) */
+  .chips { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto; min-height: 44px; padding: 0 18px; border-radius: 999px;
+    background: transparent; color: #D8D2C8; border: 1px solid var(--line-2); font-size: 15px; font-weight: 600;
   }
-  .tabs {
-    display: flex; overflow-x: auto; gap: 6px; margin-bottom: 16px;
-    -webkit-overflow-scrolling: touch; padding-bottom: 4px;
-  }
-  .tab {
-    flex: 0 0 auto; padding: 8px 14px; border-radius: 999px; background: #161616;
-    border: 1px solid #2a2a2a; color: #aaa; font-size: 13px; font-weight: 600;
-    cursor: pointer; white-space: nowrap;
-  }
-  .tab.active { background: #6366f1; color: white; border-color: #6366f1; }
-  .panel { display: none; }
-  .panel.active { display: block; }
-  label { font-size: 12px; color: #999; display: block; margin-bottom: 6px; margin-top: 12px; }
-  .mic-wrap { display: flex; flex-direction: column; align-items: center; padding: 24px 0; }
-  .mic-btn {
-    width: 88px; height: 88px; border-radius: 50%; background: #6366f1; border: none;
-    color: white; font-size: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  }
-  .mic-btn.listening { animation: pulse 1.2s infinite; background: #ef4444; }
-  @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
-    70% { box-shadow: 0 0 0 20px rgba(239,68,68,0); }
-    100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
-  }
-  .drop-zone {
-    border: 2px dashed #2a2a2a; border-radius: 14px; padding: 32px 16px;
-    text-align: center; color: #999; cursor: pointer;
-  }
-  .drop-zone.drag { border-color: #6366f1; color: #eaeaea; }
-  .thought-card { background: #161616; border: 1px solid #2a2a2a; border-radius: 12px; padding: 12px; margin-bottom: 8px; }
-  .thought-meta { font-size: 11px; color: #777; margin-bottom: 6px; }
-  .thought-content { font-size: 14px; white-space: pre-wrap; word-break: break-word; }
-  .msg { font-size: 13px; padding: 8px 12px; border-radius: 8px; margin-top: 8px; }
-  .msg.ok { background: #14301f; color: #4ade80; }
-  .msg.err { background: #301414; color: #f87171; }
-  .link { color: #818cf8; cursor: pointer; text-decoration: underline; font-size: 13px; }
+  .chip.active { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 700; }
+  .sub { display: none; }
+  .sub.active { display: block; }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px; margin-bottom: 12px; }
+  details.card > summary { cursor: pointer; list-style: none; min-height: 28px; display: flex; align-items: center; font-weight: 600; }
+  details.card > summary::-webkit-details-marker { display: none; }
+  .composer { padding: 16px; }
+  .composer textarea { background: transparent; border: 0; padding: 0; font-size: 18px; min-height: 72px; }
+  .composer-actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+  .composer-actions .save { margin-left: auto; }
+  .resurface { cursor: pointer; }
+  .resurface .meta { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .resurface .text { font-size: 16px; line-height: 1.45; }
+
+  /* Status + messages */
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #555; flex: 0 0 auto; }
+  .dot.on { background: var(--ok); }
+  .dot.off { background: var(--err); }
+  .msg { font-size: 14px; padding: 12px 14px; border-radius: 14px; margin-top: 10px; line-height: 1.4; }
+  .msg.ok { background: #14301F; color: var(--ok); }
+  .msg.err { background: #331816; color: #FCA5A5; }
+  .offline-bar { display: none; position: sticky; top: calc(var(--safe-top) + 4px); z-index: 5; margin: 0 0 12px; padding: 10px 14px; border-radius: 14px;
+    background: var(--accent-soft); color: #F7CB8C; font-size: 14px; font-weight: 600; }
+  body.offline .offline-bar { display: block; }
+  .stale { opacity: .75; pointer-events: none; }
+  .link { color: #F2B35E; cursor: pointer; text-decoration: underline; font-size: 14px; }
   .row { display: flex; gap: 8px; }
-  .row > * { flex: 1; }
-  .progress-bar { height: 6px; background: #2a2a2a; border-radius: 999px; overflow: hidden; margin-top: 8px; }
-  .progress-fill { height: 100%; background: #6366f1; transition: width 0.2s; }
-  /* Brain Calendar: Today / This week (planner.js) */
-  select { background: #161616; border: 1px solid #2a2a2a; color: #eaeaea; border-radius: 10px; padding: 10px 12px; font-size: 14px; font-family: inherit; width: 100%; }
-  .pl-day { font-size: 12px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.04em; margin: 16px 0 8px; }
-  .pl-item { display: flex; gap: 10px; align-items: flex-start; background: #161616; border: 1px solid #2a2a2a; border-radius: 12px; padding: 10px 12px; margin-bottom: 6px; }
-  .pl-item.done .pl-title { text-decoration: line-through; color: #777; }
-  .pl-check { width: 20px; height: 20px; margin: 2px 0 0; flex: 0 0 auto; accent-color: #6366f1; }
-  .pl-dot { width: 10px; height: 10px; border-radius: 50%; background: #444; margin: 6px 5px 0; flex: 0 0 auto; }
+  .row > * { flex: 1; min-width: 0; }
+
+  /* Capture: voice */
+  .mic-wrap { display: flex; flex-direction: column; align-items: center; padding: 8px 0 4px; }
+  .mic-btn { width: 88px; height: 88px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; }
+  .icon-btn.listening { background: var(--err); color: var(--accent-ink); border-color: var(--err); }
+  .mic-btn.listening { animation: pulse 1.2s infinite; background: var(--err); }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(248,113,113,.6); } 70% { box-shadow: 0 0 0 22px rgba(248,113,113,0); } 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0); } }
+  .drop-zone { border: 2px dashed var(--line-2); border-radius: 20px; padding: 36px 16px; text-align: center; color: var(--muted); cursor: pointer; font-size: 16px; }
+  .drop-zone.drag { border-color: var(--accent); color: var(--text); }
+  .progress-bar { height: 6px; background: var(--line-2); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+  .progress-fill { height: 100%; background: var(--accent); transition: width .2s; }
+  .hint { font-size: 14px; color: var(--muted); margin-top: 8px; line-height: 1.45; }
+
+  /* Brain: thoughts */
+  .thought-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; margin-bottom: 10px; }
+  .thought-meta { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .thought-content { font-size: 15px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+  .search-row { display: flex; gap: 8px; }
+  .search-row input { flex: 1; }
+
+  /* Today + Jobs (planner.js / jobs.js render these classes) */
+  .pl-day { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 22px 0 10px; }
+  .pl-item { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; margin-bottom: 8px; }
+  .pl-item.done .pl-title { text-decoration: line-through; color: var(--faint); }
+  .pl-check { width: 24px; height: 24px; margin: 0; flex: 0 0 auto; accent-color: var(--accent); }
+  .pl-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line-2); margin: 7px 7px 0; flex: 0 0 auto; }
   .pl-body { flex: 1; min-width: 0; }
-  .pl-title { font-size: 14px; word-break: break-word; }
-  .pl-when { font-size: 12px; color: #888; margin-top: 2px; }
-  .pl-chip { display: inline-block; font-size: 11px; background: #23234a; color: #a5b4fc; border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
-  .pl-chip.brain { background: #3b2a12; color: #fbbf24; }
-  .pl-empty { color: #666; font-size: 13px; padding: 4px 2px 8px; }
-  .pl-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-  .pl-actions button { padding: 8px 12px; font-size: 13px; }
+  .pl-title { font-size: 16px; font-weight: 600; line-height: 1.35; word-break: break-word; }
+  .pl-when { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+  .pl-chip { display: inline-block; font-size: 12px; font-weight: 600; background: #22283A; color: var(--blue); border-radius: 999px; padding: 2px 9px; margin-left: 4px; }
+  .pl-chip.brain { background: var(--accent-soft); color: #F7CB8C; }
+  .pl-empty { color: var(--muted); font-size: 14px; padding: 4px 2px 8px; }
+  .pl-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .pl-actions button { min-height: 44px; padding: 0 16px; font-size: 15px; border-radius: 14px; }
+  #panel-today [data-view] { min-height: 44px; border-radius: 999px; font-size: 15px; }
+
+  /* ---------- Study (gaps.js) ---------- */
+  .gq-meta { font-size: 14px; color: var(--muted); margin: 0 2px 12px; }
+  .gq-steps { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
+  .gq-step { width: 28px; height: 4px; border-radius: 99px; background: var(--line-2); }
+  .gq-step.done { background: #8A6A3A; }
+  .gq-step.now { background: var(--accent); }
+  .gq-count { margin-left: auto; font-size: 14px; color: var(--muted); }
+  .gq-card { background: var(--surface); border: 1px solid var(--line); border-radius: 26px; padding: 22px; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; transition: transform .2s ease, opacity .2s ease; }
+  .gq-kicker { font-size: 12px; font-weight: 700; color: #F2B35E; letter-spacing: .05em; text-transform: uppercase; }
+  .gq-q { font-family: var(--display); font-size: 24px; font-weight: 600; line-height: 1.25; word-break: break-word; }
+  .gq-why { font-size: 14px; color: var(--muted); }
+  .gq-answer-box { padding: 14px 16px; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 16px; font-size: 16px; line-height: 1.45; }
+  .gq-buttons { display: flex; gap: 10px; }
+  .gq-buttons > .grow { flex: 1; }
+  .gq-got { background: #163322; color: var(--ok); border: 1px solid #23452F; }
+  .gq-miss { background: #33200F; color: #FB923C; border: 1px solid #4A2A22; }
+  .gq-swipe { text-align: center; font-size: 13px; color: var(--muted); margin-top: 12px; }
+  .gq-done { text-align: center; padding: 30px 22px; }
+  .gq-done .big { font-family: var(--display); font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+
+  /* ---------- Brain map (graph.js) ---------- */
+  .graph-wrap { position: relative; height: min(calc(100dvh - var(--safe-top) - var(--safe-bottom) - 330px), calc((100vw - 40px) * 1.08), 620px); min-height: 340px;
+    border-radius: 24px; overflow: hidden; background: #0c0b0e; border: 1px solid #23211D; }
+  #graphCanvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; cursor: grab; }
+  .graph-status { position: absolute; left: 0; right: 0; top: 45%; text-align: center; color: var(--muted); font-size: 15px; pointer-events: none; padding: 0 24px; }
+  .graph-note { position: absolute; left: 12px; right: 12px; top: 12px; padding: 10px 14px; border-radius: 14px; background: rgba(38,36,31,.92);
+    color: var(--text); font-size: 14px; font-weight: 600; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .graph-tools { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 8px; }
+  .graph-tool { min-height: 44px; padding: 0 14px; border-radius: 14px; font-size: 14px; font-weight: 600;
+    background: rgba(38,36,31,.85); color: var(--text); border: 1px solid #3A372F; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .graph-tool.icon-btn { width: 44px; min-width: 44px; padding: 0; }
+  .graph-sheet { position: absolute; left: 8px; right: 8px; bottom: 8px; max-height: 72%; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    background: #1F1D19; border: 1px solid var(--line-2); border-radius: 20px; padding: 14px 16px 16px;
+    transform: translateY(110%); transition: transform .25s cubic-bezier(.2,.8,.2,1); box-shadow: 0 -10px 30px rgba(0,0,0,.5); }
+  .graph-sheet:not(.open) { visibility: hidden; box-shadow: none; transition: transform .25s, visibility 0s .25s; }
+  .graph-sheet.open { transform: none; }
+  .gs-top { display: flex; align-items: center; gap: 10px; }
+  .gs-topic { flex: 1; font-size: 14px; font-weight: 700; }
+  .gs-close { min-height: 44px; }
+  .gs-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; display: inline-block; box-shadow: 0 0 8px currentColor; }
+  .gs-date { font-size: 13px; color: var(--muted); margin: 4px 0 10px; }
+  .gs-text { font-size: 16px; line-height: 1.45; word-break: break-word; }
+  .gs-text.full { white-space: pre-wrap; }
+  .gs-near-title { font-size: 13px; font-weight: 700; color: var(--muted); margin: 16px 0 6px; text-transform: uppercase; letter-spacing: .05em; }
+  .gs-near { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; color: var(--text);
+    border-top: 1px solid var(--line); border-radius: 0; padding: 10px 0; min-height: 48px; font-size: 15px; font-weight: 500; }
+  .gs-near span:last-child { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .graph-legend { margin: 12px 0 6px; }
+  .legend-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+  .legend-chip.active .gs-dot { box-shadow: none; }
+
+  /* ---------- Bottom tab bar (floating pill) ---------- */
+  .tabbar {
+    position: fixed; left: 50%; transform: translateX(-50%); z-index: 20;
+    bottom: calc(var(--safe-bottom) + 14px); width: calc(100% - 40px); max-width: 520px; height: var(--nav-h);
+    padding: 6px; background: rgba(44,42,37,.94); border: 1px solid var(--line-2); border-radius: 24px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.45); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: transform .2s ease, opacity .2s ease;
+  }
+  .tabbar button {
+    min-height: 0; height: 100%; padding: 0; border-radius: 18px; background: transparent; color: var(--muted);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 600;
+  }
+  .tabbar button.active { background: var(--text); color: var(--bg); }
+  .tabbar button.capture { color: var(--accent); }
+  .tabbar button.capture.active { background: var(--accent); color: var(--accent-ink); }
+  .tabbar svg { width: 24px; height: 24px; }
+  body.typing .tabbar { opacity: 0; pointer-events: none; transform: translate(-50%, 20px); }
+
+  /* Sign-in */
+  #authScreen { padding-top: calc(var(--safe-top) + 64px); max-width: 400px; }
+  .brand { font-family: var(--display); font-weight: 700; font-size: 28px; text-align: center; margin-bottom: 22px; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
 
-<div id="authScreen" class="container" style="display:none; max-width: 380px; margin-top: 60px;">
-  <div class="brand" style="justify-content:center; margin-bottom: 20px;">🧠 My Open Brain</div>
+<div id="authScreen" class="container" style="display:none;">
+  <div class="brand">My Open Brain</div>
   <div class="card">
-    <h3 id="authTitle" style="margin-top:0;">Sign in</h3>
-    <label>Email</label>
-    <input type="email" id="authEmail" placeholder="you@example.com">
-    <label>Password</label>
-    <input type="password" id="authPassword" placeholder="••••••••">
-    <button id="authSubmit" style="width:100%; margin-top:16px;">Sign in</button>
+    <h2 id="authTitle" style="font-size:22px;">Sign in</h2>
+    <label for="authEmail">Email</label>
+    <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="email">
+    <label for="authPassword">Password</label>
+    <input type="password" id="authPassword" placeholder="••••••••" autocomplete="current-password">
+    <button id="authSubmit" style="width:100%; margin-top:18px;">Sign in</button>
     <div id="authMsg"></div>
-    <div style="text-align:center; margin-top:16px;">
-      <span class="link" id="authToggle">Need an account? Sign up</span>
+    <div style="text-align:center; margin-top:14px;">
+      <button class="linkish" id="authToggle" type="button">Need an account? Sign up</button>
     </div>
   </div>
 </div>
 
 <div id="app" class="container" style="display:none;">
-  <div class="topbar">
-    <div class="brand"><span id="statusDot" class="dot"></span> My Open Brain</div>
-    <button class="secondary" id="signOutBtn">Sign out</button>
-  </div>
+  <div class="offline-bar" role="status">You're offline. Showing your last saved copy. New thoughts save when you're back.</div>
 
-  <div class="tabs">
-    <div class="tab active" data-tab="today">📅 Today</div>
-    <div class="tab" data-tab="jobs">💼 Jobs</div>
-    <div class="tab" data-tab="voice">🎙️ Voice</div>
-    <div class="tab" data-tab="youtube">▶️ YouTube</div>
-    <div class="tab" data-tab="pdf">📄 PDF</div>
-    <div class="tab" data-tab="url">🔗 URL</div>
-    <div class="tab" data-tab="search">🔍 Search</div>
-    <div class="tab" data-tab="recent">🕐 Recent</div>
-  </div>
-
-  <div class="panel active" id="panel-today">
+  <!-- ===== TODAY ===== -->
+  <section class="screen active" id="screen-today" aria-label="Today">
+    <div class="screen-head">
+      <h1 id="greeting">Hello</h1>
+      <span id="statusDot" class="dot" title="Connection"></span>
+    </div>
+    <div class="card composer">
+      <label for="quickText" style="margin-top:0;">New thought</label>
+      <textarea id="quickText" placeholder="What's on your mind?" rows="3"></textarea>
+      <div class="composer-actions">
+        <button class="secondary icon-btn" id="quickVoice" aria-label="Speak a thought" type="button"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg></button>
+        <button class="secondary icon-btn" id="quickLink" aria-label="Save a link or YouTube video" type="button"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>
+        <button class="secondary icon-btn" id="quickPdf" aria-label="Save a PDF" type="button"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg></button>
+        <button class="save" id="quickSave" type="button">Save</button>
+      </div>
+      <div id="quickMsg"></div>
+    </div>
+    <div id="resurfaceWrap" style="display:none;">
+      <div class="section-title"><span>From your brain</span><button class="linkish" id="resurfaceNext" type="button">Another</button></div>
+      <div class="card resurface" id="resurface"></div>
+    </div>
+    <div class="section-title"><span>Your plan</span></div>
+    <div class="sub active" id="panel-today">
     <div class="row" style="margin-bottom:8px;">
       <button data-view="today">Today</button>
       <button data-view="week" class="secondary">This week</button>
@@ -155,7 +297,7 @@
       <div style="font-size:12px; color:#777; margin-top:6px;">With a time it goes on your timeline and Brain calendar for the length you pick. Date only = due date. No date = "Not scheduled yet".</div>
       <button id="plannerAddBtn" style="width:100%; margin-top:10px;">Add</button>
     </div>
-    <details class="card">
+    <details class="card" style="margin-top:12px;">
       <summary style="cursor:pointer; font-size:13px; color:#999;">Goals</summary>
       <div id="plannerGoalList"></div>
       <div class="row" style="margin-top:10px;">
@@ -165,28 +307,54 @@
       <div style="font-size:12px; color:#777; margin-top:6px;">Untick "show" to hide a goal from the list. Items already tagged keep it.</div>
       <div id="plannerGoalMsg"></div>
     </details>
-  </div>
+    </div>
+  </section>
 
-  <div class="panel" id="panel-jobs">
+  <!-- ===== JOBS ===== -->
+  <section class="screen" id="screen-jobs" aria-label="Jobs">
+    <div class="screen-head"><h1>Jobs</h1></div>
+    <div class="sub active" id="panel-jobs">
     <div id="jobsNotes"></div>
     <div id="jobsList"></div>
     <div id="jobsCost" style="font-size:12px; color:#777; margin-top:12px;"></div>
-  </div>
-
-  <div class="panel" id="panel-voice">
-    <div class="card">
-      <div class="mic-wrap">
-        <button class="mic-btn" id="micBtn">🎙️</button>
-        <div id="micStatus" style="margin-top:12px; color:#999; font-size:13px;">Tap to speak</div>
-      </div>
-      <label>Transcript (review before saving)</label>
-      <textarea id="voiceTranscript" placeholder="Your words will appear here..."></textarea>
-      <button id="voiceSaveBtn" style="width:100%; margin-top:12px;">Save Thought</button>
-      <div id="voiceMsg"></div>
     </div>
-  </div>
+  </section>
 
-  <div class="panel" id="panel-youtube">
+  <!-- ===== CAPTURE ===== -->
+  <section class="screen" id="screen-capture" aria-label="Capture">
+    <div class="screen-head"><h1>Capture</h1></div>
+    <div class="chips" role="tablist">
+      <button class="chip active" data-sub="voice" type="button">Thought</button>
+      <button class="chip" data-sub="url" type="button">Link</button>
+      <button class="chip" data-sub="youtube" type="button">YouTube</button>
+      <button class="chip" data-sub="pdf" type="button">PDF</button>
+    </div>
+    <div class="sub active" id="panel-voice">
+      <div class="card">
+        <div class="mic-wrap">
+          <button class="mic-btn" id="micBtn" aria-label="Speak" type="button"><svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg></button>
+          <div id="micStatus" class="hint">Tap to speak</div>
+        </div>
+        <label for="voiceTranscript">Your thought (type or speak, then review)</label>
+        <textarea id="voiceTranscript" placeholder="Your words will appear here..."></textarea>
+        <button id="voiceSaveBtn" style="width:100%; margin-top:12px;">Save thought</button>
+        <div id="voiceMsg"></div>
+      </div>
+    </div>
+    <div class="sub" id="panel-url">
+    <div class="card">
+      <label>Article URL</label>
+      <input type="text" id="urlInput" placeholder="https://example.com/article">
+      <div style="font-size:13px; color:#999; margin-top:8px;">
+        Your browser can't fetch another site's article for security reasons — open the link, copy the text you want, and paste it below.
+      </div>
+      <label>Paste article text</label>
+      <textarea id="urlText" style="min-height:150px;"></textarea>
+      <button id="urlSaveBtn" style="width:100%; margin-top:12px;">Save Thought</button>
+      <div id="urlMsg"></div>
+    </div>
+    </div>
+    <div class="sub" id="panel-youtube">
     <div class="card">
       <label>YouTube URL</label>
       <input type="text" id="ytUrl" placeholder="https://www.youtube.com/watch?v=...">
@@ -204,12 +372,11 @@
       </div>
       <div id="ytMsg"></div>
     </div>
-  </div>
-
-  <div class="panel" id="panel-pdf">
+    </div>
+    <div class="sub" id="panel-pdf">
     <div class="card">
       <div class="drop-zone" id="pdfDropZone">
-        <div>📄 Drop a PDF here, or click to choose a file</div>
+        <div>Tap to choose a PDF<br><span style="font-size:14px;">or drop one here on a computer</span></div>
         <input type="file" id="pdfInput" accept="application/pdf" style="display:none;">
       </div>
       <div id="pdfProgressWrap" style="display:none;">
@@ -223,39 +390,79 @@
       </div>
       <div id="pdfMsg"></div>
     </div>
-  </div>
-
-  <div class="panel" id="panel-url">
-    <div class="card">
-      <label>Article URL</label>
-      <input type="text" id="urlInput" placeholder="https://example.com/article">
-      <div style="font-size:13px; color:#999; margin-top:8px;">
-        Your browser can't fetch another site's article for security reasons — open the link, copy the text you want, and paste it below.
-      </div>
-      <label>Paste article text</label>
-      <textarea id="urlText" style="min-height:150px;"></textarea>
-      <button id="urlSaveBtn" style="width:100%; margin-top:12px;">Save Thought</button>
-      <div id="urlMsg"></div>
     </div>
-  </div>
+  </section>
 
-  <div class="panel" id="panel-search">
-    <div class="card">
-      <div class="row">
-        <input type="text" id="searchInput" placeholder="Search your thoughts...">
-        <button id="searchBtn" style="flex:0 0 auto;">Search</button>
-      </div>
-      <button class="secondary" id="searchClearBtn" style="margin-top:8px; width:100%;">Clear</button>
+  <!-- ===== STUDY ===== -->
+  <section class="screen" id="screen-study" aria-label="Study">
+    <div class="screen-head"><h1>Study</h1></div>
+    <div class="chips" role="tablist">
+      <button class="chip active" data-sub="gaps" type="button">Gaps</button>
+      <button class="chip" data-sub="quiz" type="button">Quiz</button>
     </div>
-    <div id="searchResults"></div>
-  </div>
+    <div class="sub active" id="panel-gaps">
+      <div id="gapsMeta" class="gq-meta"></div>
+      <div id="gapsMsg"></div>
+      <div id="gapsList"></div>
+      <button id="gapsBtn" class="secondary" style="width:100%; margin-top:14px;">Find new gaps</button>
+    </div>
+    <div class="sub" id="panel-quiz">
+      <div id="quizMeta" class="gq-meta"></div>
+      <div id="quizMsg"></div>
+      <div id="quizList"></div>
+      <button id="quizBtn" class="secondary" style="width:100%; margin-top:14px;">New quiz</button>
+    </div>
+  </section>
 
-  <div class="panel" id="panel-recent">
-    <div id="recentList"></div>
-  </div>
+  <!-- ===== BRAIN ===== -->
+  <section class="screen" id="screen-brain" aria-label="Brain">
+    <div class="screen-head"><h1>Brain</h1></div>
+    <div class="chips" role="tablist">
+      <button class="chip active" data-sub="graph" type="button">Map</button>
+      <button class="chip" data-sub="thoughts" type="button">Thoughts</button>
+    </div>
+    <div class="sub active" id="panel-graph">
+      <div class="graph-wrap">
+        <canvas id="graphCanvas" role="img" aria-label="Map of your thoughts"></canvas>
+        <div class="graph-status" id="graphStatus" role="status"></div>
+        <div class="graph-note" id="graphNote" role="status"></div>
+        <div class="graph-tools">
+          <button class="graph-tool" id="graphLinks" type="button" aria-pressed="false">Strong links</button>
+          <button class="graph-tool icon-btn" id="graphFit" type="button" aria-label="Show the whole map">
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        </div>
+        <div class="graph-sheet" id="graphSheet" aria-hidden="true"></div>
+      </div>
+      <div class="chips graph-legend" id="graphLegend" aria-label="Topics"></div>
+      <div class="hint" style="margin-top:0;">Drag to turn your brain, pinch to zoom. Tap a dot to open that thought.</div>
+    </div>
+    <div class="sub" id="panel-thoughts">
+    <div class="sub active" id="panel-search">
+      <form class="search-row" id="searchForm" role="search">
+        <input type="search" id="searchInput" placeholder="Search your thoughts..." enterkeyhint="search" aria-label="Search your thoughts">
+        <button id="searchBtn" type="submit">Search</button>
+      </form>
+      <button class="linkish" id="searchClearBtn" type="button" style="display:none;">Clear search</button>
+      <div id="searchResults"></div>
+    </div>
+    <div class="sub active" id="panel-recent">
+      <div class="section-title"><span>Recent</span></div>
+      <div id="recentList"></div>
+    </div>
+    </div>
+    <button class="secondary" id="signOutBtn" style="width:100%; margin-top:24px;">Sign out</button>
+  </section>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<nav class="tabbar" id="tabbar" aria-label="Main" style="display:none;">
+  <button data-screen="today" class="active" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>Today</span></button>
+  <button data-screen="jobs" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="17" height="13" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3.5 12.5h17"/></svg><span>Jobs</span></button>
+  <button data-screen="capture" class="capture" type="button" aria-label="Capture"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Capture</span></button>
+  <button data-screen="study" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg><span>Study</span></button>
+  <button data-screen="brain" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="7" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="17" r="3"/><path d="M8 8.5l2.5 6M16.5 8l-3 6.5M8.5 7h7"/></svg><span>Brain</span></button>
+</nav>
+
+<!-- pdf.js now loads only when you pick a PDF (see shell.js), so the app opens faster on a phone -->
 <script src="planner.js"></script>
 <script src="jobs.js"></script>
 <script>
@@ -324,13 +531,12 @@ sb.auth.onAuthStateChange((event, session) => {
     document.getElementById('app').style.display = 'block';
     checkConnection();
     loadRecent();
-    if (location.hash === '#today') showTab('today');
-    if (location.hash === '#jobs') { showTab('jobs'); loadJobs(); }
-    if (document.getElementById('panel-today').classList.contains('active')) loadPlanner();
+    obShell.onSignedIn();   // shell.js: opens the right screen from the link (#today, #jobs, #gaps, #quiz...) and loads it
   } else {
     currentUser = null;
     document.getElementById('authScreen').style.display = 'block';
     document.getElementById('app').style.display = 'none';
+    obShell.onSignedOut();
   }
 });
 
@@ -344,20 +550,7 @@ async function checkConnection() {
   }
 }
 
-function showTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-' + name).classList.add('active');
-}
-
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    showTab(tab.dataset.tab);
-    if (tab.dataset.tab === 'recent') loadRecent();
-    if (tab.dataset.tab === 'today') loadPlanner();
-    if (tab.dataset.tab === 'jobs') loadJobs();
-  });
-});
+// Tabs: the bottom tab bar and showTab() live in shell.js now.
 
 let recognition = null;
 let listening = false;
@@ -411,9 +604,8 @@ document.getElementById('voiceSaveBtn').addEventListener('click', async () => {
   const msgEl = document.getElementById('voiceMsg');
   if (!text) { showMsg(msgEl, 'Nothing to save yet.', false); return; }
   try {
-          const { error } = await sb.from('thoughts').upsert({ content: text, user_id: currentUser.id }, { onConflict: 'dedup_key,user_id', ignoreDuplicates: false });
-    if (error) throw error;
-    showMsg(msgEl, 'Saved!', true);
+    const r = await obSaveThought({ content: text });   // shell.js: saves, or queues it if you're offline
+    showMsg(msgEl, r.queued ? 'Saved on this phone. It goes to your brain when you\'re back online.' : 'Saved!', true);
     document.getElementById('voiceTranscript').value = '';
   } catch (err) {
     showMsg(msgEl, err.message || 'Save failed.', false);
@@ -484,9 +676,6 @@ document.getElementById('ytSaveBtn').addEventListener('click', async () => {
   }
 });
 
-if (window.pdfjsLib) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-}
 
 const pdfDropZone = document.getElementById('pdfDropZone');
 const pdfInput = document.getElementById('pdfInput');
@@ -515,6 +704,8 @@ async function handlePdfFile(file) {
   const label = document.getElementById('pdfProgressLabel');
   fill.style.width = '0%';
   try {
+    label.textContent = 'Opening PDF...';
+    await obLoadPdfJs();
     const buffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
     let fullText = '';
@@ -575,7 +766,7 @@ function renderThoughtCards(container, thoughts) {
   }
   container.innerHTML = thoughts.map(t => `
     <div class="thought-card">
-      <div class="thought-meta">${new Date(t.created_at).toLocaleString()}</div>
+      <div class="thought-meta">${new Date(t.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
       <div class="thought-content">${escapeHtml(t.content).slice(0, 500)}${t.content.length > 500 ? '…' : ''}</div>
     </div>
   `).join('');
@@ -592,7 +783,7 @@ function renderSearchResults(container, results) {
     const long = t.content_length > 500;
     return `
     <div class="thought-card">
-      <div class="thought-meta">${new Date(t.created_at).toLocaleString()}</div>
+      <div class="thought-meta">${new Date(t.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
       <div class="thought-content">${escapeHtml(t.content.slice(0, t.matched_chunk ? 200 : 500))}${(t.matched_chunk ? t.content_length > 200 : long) ? '…' : ''}</div>
       ${t.matched_chunk ? `
       <div class="thought-meta" style="margin-top:10px;">Matched passage (from partway through a longer capture):</div>
@@ -607,10 +798,14 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-document.getElementById('searchBtn').addEventListener('click', async () => {
+document.getElementById('searchForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
   const q = document.getElementById('searchInput').value.trim();
   const resultsEl = document.getElementById('searchResults');
   if (!q) return;
+  document.activeElement && document.activeElement.blur();   // close the phone keyboard
+  document.getElementById('panel-recent').classList.remove('active');
+  document.getElementById('searchClearBtn').style.display = 'inline-flex';
   resultsEl.innerHTML = '<div style="color:#777; text-align:center; padding:20px;">Searching…</div>';
   try {
     // Level 8: hybrid search (meaning + keywords + chunks) runs on the server,
@@ -620,24 +815,30 @@ document.getElementById('searchBtn').addEventListener('click', async () => {
     if (!data?.ok) throw new Error(data?.error || 'Search failed.');
     renderSearchResults(resultsEl, data.results);
   } catch (err) {
-    resultsEl.innerHTML = `<div class="msg err">${err.message || 'Search failed.'}</div>`;
+    resultsEl.innerHTML = `<div class="msg err">${escapeHtml(navigator.onLine ? (err.message || 'Search failed.') : 'Search needs a connection.')}</div>`;
   }
 });
 
 document.getElementById('searchClearBtn').addEventListener('click', () => {
   document.getElementById('searchInput').value = '';
   document.getElementById('searchResults').innerHTML = '';
+  document.getElementById('searchClearBtn').style.display = 'none';
+  document.getElementById('panel-recent').classList.add('active');
 });
 
 async function loadRecent() {
   const listEl = document.getElementById('recentList');
   try {
     const { data, error } = await sb.from('thoughts')
-      .select('*').order('created_at', { ascending: false }).limit(20);
+      .select('id, created_at, content').order('created_at', { ascending: false }).limit(20);
     if (error) throw error;
     renderThoughtCards(listEl, data);
+    // Offline copy: first 600 characters of each, never whole transcripts.
+    obCache.put('recent', data.map(t => ({ id: t.id, created_at: t.created_at, content: String(t.content || '').slice(0, 600) })));
   } catch (err) {
-    listEl.innerHTML = `<div class="msg err">${err.message || 'Could not load thoughts.'}</div>`;
+    const saved = obCache.get('recent');
+    if (saved) { renderThoughtCards(listEl, saved.value); return; }
+    listEl.innerHTML = `<div class="msg err">${escapeHtml(err.message || 'Could not load thoughts.')}</div>`;
   }
 }
 
@@ -647,5 +848,8 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+<script src="shell.js"></script>
+<script src="graph.js"></script>
+<script src="gaps.js"></script>
 </body>
 </html>
