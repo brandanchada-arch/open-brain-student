@@ -58,9 +58,17 @@ function jobsNextActions(status) {
 const JOBS_VALLEY = ['phoenix', 'scottsdale', 'tempe', 'mesa', 'chandler', 'gilbert', 'glendale', 'peoria', 'surprise', 'goodyear',
   'avondale', 'buckeye', 'queen creek', 'paradise valley', 'fountain hills', 'litchfield park', 'tolleson', 'el mirage', 'cave creek',
   'sun city', 'laveen', 'ahwatukee', 'apache junction', 'san tan valley'];
+// When the place names a state ("Peoria, IL"), it must be Arizona (same rule as jobs.ts).
+function jobsStateIsArizona(location) {
+  const m = /,\s*([A-Za-z][A-Za-z .]*?)\s*(?:,|\)|$)/.exec(String(location || ''));
+  if (!m) return true;
+  const s = m[1].trim().toLowerCase().replace(/\./g, '');
+  return ['az', 'arizona', 'us', 'usa', 'united states'].includes(s);
+}
 function jobsInValley(location) {
   const l = String(location || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  return !!l && JOBS_VALLEY.some(c => l === c || l.startsWith(c + ' ') || l.includes(' ' + c + ' ') || l.endsWith(' ' + c));
+  if (!l || !jobsStateIsArizona(location)) return false;
+  return JOBS_VALLEY.some(c => l === c || l.startsWith(c + ' ') || l.includes(' ' + c + ' ') || l.endsWith(' ' + c));
 }
 
 // Going through the list (#74): which jobs a filter shows.
