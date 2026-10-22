@@ -153,6 +153,11 @@
   .pl-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
   .pl-actions button { min-height: 44px; padding: 0 16px; font-size: 15px; border-radius: 14px; }
   #panel-today [data-view] { min-height: 44px; border-radius: 999px; font-size: 15px; }
+  .pl-post { white-space: pre-wrap; font-size: 14px; line-height: 1.5; color: var(--text, #ddd); max-height: 60vh; overflow-y: auto; margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; }
+  .pl-filter { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+  .pl-filter button { min-height: 36px; padding: 0 12px; font-size: 14px; border-radius: 999px; }
+  .pl-item.open { border-color: var(--accent); }
+  [hidden] { display: none !important; }
 
   /* ---------- Study (gaps.js) ---------- */
   .gq-meta { font-size: 14px; color: var(--muted); margin: 0 2px 12px; }
@@ -279,23 +284,34 @@
       <button data-view="week" class="secondary">This week</button>
     </div>
     <div id="plannerNotes"></div>
+    <div id="plannerPush"></div>
     <div id="plannerWaiting"></div>
+    <div id="plannerSkipped"></div>
     <div id="plannerTimeline"></div>
     <div class="pl-day">Not scheduled yet</div>
     <div id="plannerTray"></div>
     <div class="card" style="margin-top:16px;">
-      <label style="margin-top:0;">Add to your list</label>
-      <input type="text" id="plannerTitle" placeholder="e.g. Finish FIN 450 case study">
-      <div class="row" style="margin-top:8px;">
-        <input type="date" id="plannerDate" aria-label="Date">
-        <input type="time" id="plannerTime" aria-label="Time (optional)">
+      <label for="plannerQuick" style="margin-top:0;">Add to your list</label>
+      <div class="row">
+        <input type="text" id="plannerQuick" placeholder="e.g. dentist Fri 3pm 30m" enterkeyhint="done">
+        <button id="plannerQuickBtn" style="flex:0 0 auto;">Add</button>
       </div>
-      <div class="row" style="margin-top:8px;">
-        <select id="plannerGoal" aria-label="Goal"></select>
-        <select id="plannerMinutes" aria-label="How long"></select>
-      </div>
-      <div style="font-size:12px; color:#777; margin-top:6px;">With a time it goes on your timeline and Brain calendar for the length you pick. Date only = due date. No date = "Not scheduled yet".</div>
-      <button id="plannerAddBtn" style="width:100%; margin-top:10px;">Add</button>
+      <div style="font-size:12px; color:#777; margin-top:6px;">Plain words work: a day and time put it on your calendar ("gym tomorrow 6pm 1h"), "by Thu" makes a due date, nothing = "Not scheduled yet".</div>
+      <div id="plannerQuickMsg"></div>
+      <details style="margin-top:8px;">
+        <summary style="cursor:pointer; font-size:13px; color:#999;">More options (pick the date, time, length or goal yourself)</summary>
+        <input type="text" id="plannerTitle" placeholder="e.g. Finish FIN 450 case study" style="margin-top:8px;">
+        <div class="row" style="margin-top:8px;">
+          <input type="date" id="plannerDate" aria-label="Date">
+          <input type="time" id="plannerTime" aria-label="Time (optional)">
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <select id="plannerGoal" aria-label="Goal"></select>
+          <select id="plannerMinutes" aria-label="How long"></select>
+        </div>
+        <div style="font-size:12px; color:#777; margin-top:6px;">With a time it goes on your timeline and Brain calendar for the length you pick. Date only = due date. No date = "Not scheduled yet".</div>
+        <button id="plannerAddBtn" style="width:100%; margin-top:10px;">Add</button>
+      </details>
     </div>
     <details class="card" style="margin-top:12px;">
       <summary style="cursor:pointer; font-size:13px; color:#999;">Goals</summary>

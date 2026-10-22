@@ -2,6 +2,8 @@
 // Tasks live in Brain Calendar's own tables (bc_tasks, bc_goals ...).
 // Google Calendar events come from the bc-calendar cloud function.
 // Milestone 2: plans waiting for your OK (#33), check-ins (#49), goals (#60),
+// Milestone 4: notifications on this device (#63), quick add in plain words (#69),
+// "Different time" and the Sunday skipped list answered here instead of Telegram (#64).
 // and choosing how long a new item lasts (#59).
 // "Schedule" puts an item from "Not scheduled yet" on the calendar without retyping it.
 // This file never reads or writes Open Brain thoughts.
@@ -140,14 +142,57 @@ function plannerCleanGoalName(name, existing, exceptId) {
   return { name: n };
 }
 
+// Notifications (Brain Calendar #63): what to show, given what this device can do.
+// iPhone only allows web push from the Home Screen app, so say so in Safari.
+function plannerPushStatus(o) {
+  if (o.ios && !o.standalone) {
+    return { text: 'On iPhone, notifications only work from the Home Screen app: tap Share, then "Add to Home Screen", open the app from there and turn them on.', canTurnOn: false, canTest: false };
+  }
+  if (!o.supported) return { text: 'This browser can\'t show notifications from the app.', canTurnOn: false, canTest: false };
+  if (o.permission === 'denied') return { text: 'Notifications are blocked for this app. Allow them in your phone or browser settings, then come back.', canTurnOn: false, canTest: false };
+  if (o.subscribed) return { text: 'Notifications are on for this device.', canTurnOn: false, canTest: true };
+  return { text: 'Turn on notifications to get reminders before events, the 7:00 AM summary and urgent alerts.', canTurnOn: true, canTest: false };
+}
+
+// The server's public key (base64url) as bytes, for pushManager.subscribe().
+function plannerB64ToBytes(s) {
+  const b64 = String(s).replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b64 + '==='.slice((b64.length + 3) % 4));
+  return Uint8Array.from(bin, c => c.charCodeAt(0));
+}
+
+// What quick add understood (#69), in plain words.
+function plannerQuickSummary(t) {
+  if (!t) return '';
+  if (t.scheduled_start) {
+    const day = new Date(t.scheduled_start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    const mins = Math.round((new Date(t.scheduled_end) - new Date(t.scheduled_start)) / 60000);
+    return `Added "${t.title}": ${day}, ${plannerFmtTime(t.scheduled_start)}–${plannerFmtTime(t.scheduled_end)} (${mins} min), on your Brain calendar.`;
+  }
+  if (t.due_at) return `Added "${t.title}", due ${new Date(t.due_at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}. It's under "Not scheduled yet".`;
+  return `Added "${t.title}" under "Not scheduled yet".`;
+}
+
+// The Sunday "skipped this week" list (#22), numbered as in the readout. Hidden after 7 days.
+function plannerSkippedRows(list, emails, now) {
+  if (!list || !Array.isArray(list.ids) || !list.sent_at) return [];
+  if (new Date(now) - new Date(list.sent_at) > 7 * 86400000) return [];
+  const byId = new Map((emails || []).map(e => [e.id, e]));
+  return list.ids.map((id, i) => ({ n: i + 1, email: byId.get(id) })).filter(r => r.email)
+    .map(r => ({ n: r.n, from: r.email.from_name || r.email.from_email, subject: r.email.subject || '', learned: r.email.feedback === 'should_ping' }));
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { plannerBuildView, plannerRange, plannerDayKey, plannerFormToTask, plannerScheduleTimes, plannerDurationOptions, plannerCleanGoalName };
+  module.exports = {
+    plannerBuildView, plannerRange, plannerDayKey, plannerFormToTask, plannerScheduleTimes, plannerDurationOptions, plannerCleanGoalName,
+    plannerPushStatus, plannerB64ToBytes, plannerQuickSummary, plannerSkippedRows,
+  };
 }
 
 // ---------- The page ----------
 
 if (typeof document !== 'undefined') {
-  const P = { view: 'today', goals: [], allGoals: [], settings: {}, ready: false, busy: false, noteFor: null, tray: [], schedFor: null };
+  const P = { view: 'today', goals: [], allGoals: [], settings: {}, ready: false, busy: false, noteFor: null, tray: [], schedFor: null, other: null, props: [], checks: [], pushChecked: false };
   const el = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const api = body => sb.functions.invoke('bc-calendar', { body });
@@ -210,7 +255,11 @@ if (typeof document !== 'undefined') {
         plannerNote(`Heads up: projected cost this month is $${Number(c.projected_month).toFixed(2)}, above your $${Number(c.budget).toFixed(2)} budget.`);
       }
 
-      plannerRenderWaiting(props.data || [], checks.data || []);
+      P.props = props.data || [];
+      P.checks = checks.data || [];
+      plannerRenderWaiting(P.props, P.checks);
+      plannerLoadSkipped();
+      if (!P.pushChecked) { P.pushChecked = true; plannerRenderPush(true); }
       plannerRender(plannerBuildView(tasks || [], events, P.view, now));
 
       // Tasks with a time that aren't on the Brain calendar yet (e.g. added before Google was connected).
@@ -241,7 +290,8 @@ if (typeof document !== 'undefined') {
       html += '<div class="pl-day">Waiting for your OK</div>' + props.map(p => `<div class="pl-item"><div class="pl-body">
         <div class="pl-title">${esc(p.summary)}</div>
         <div class="pl-actions"><button data-decide="${p.id}:approved">${p.kind === 'replan' ? 'Approve all' : 'Approve'}</button>
-        <button class="secondary" data-decide="${p.id}:not_now">Not now</button></div></div></div>`).join('');
+        ${p.kind === 'schedule' ? `<button class="secondary" data-other="${p.id}">Different time</button>` : ''}
+        <button class="secondary" data-decide="${p.id}:not_now">Not now</button></div>${plannerOtherHtml(p)}</div></div>`).join('');
     }
     if (checks.length) {
       html += '<div class="pl-day">How did it go? <span style="text-transform:none; font-weight:400;">No rush</span></div>' + checks.map(c => `<div class="pl-item"><div class="pl-body">
@@ -375,6 +425,144 @@ if (typeof document !== 'undefined') {
     plannerLoad();
   }
 
+  // ---- "Different time" on a suggestion (was a Telegram button, Brain Calendar #64) ----
+  function plannerOtherHtml(p) {
+    const o = P.other;
+    if (!o || o.id !== p.id) return '';
+    if (o.loading) return '<div class="pl-when" style="margin-top:8px;">Finding open times…</div>';
+    const opts = (o.options || []).map((s, i) => `<button class="secondary" data-other-pick="${p.id}:${i}">${esc(new Date(s.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' + plannerFmtTime(s.start) + '–' + plannerFmtTime(s.end))}</button>`).join('');
+    return `<div style="margin-top:10px;">
+      <div class="pl-when">${o.options && o.options.length ? 'Other open times:' : 'No other open times found.'}${o.calendarRead === false ? ' (Couldn\'t read your calendar just now, so check these against your classes.)' : ''}</div>
+      <div class="pl-actions">${opts}</div>
+      <div class="row" style="margin-top:8px;"><input type="text" id="plannerOtherText" placeholder='Or type one, like "Thu 7pm"'>
+        <button data-other-type="${p.id}" style="flex:0 0 auto;">Use it</button></div>
+      ${o.msg ? `<div class="msg err">${esc(o.msg)}</div>` : ''}</div>`;
+  }
+
+  async function plannerOtherTimes(id) {
+    P.other = { id, loading: true };
+    plannerRenderWaiting(P.props, P.checks);
+    const { data } = await api({ action: 'other-times', proposal_id: id });
+    if (!data?.ok) { P.other = null; plannerNote(data?.error === 'already' ? 'That suggestion was already decided.' : 'Could not look up other times. Try again.'); plannerLoad(); return; }
+    P.other = { id, options: data.options, calendarRead: data.calendarRead };
+    plannerRenderWaiting(P.props, P.checks);
+  }
+
+  async function plannerChooseTime(id, body) {
+    const { data } = await api({ action: 'choose-time', proposal_id: id, ...body });
+    if (!data?.ok) {
+      const why = { no_time: 'I couldn\'t find a day and time in that. Try something like "Thu 7pm".', time_passed: 'That time has already passed.', ai_unavailable: 'I can\'t read typed times right now. Pick one of the times above.' }[data?.error] || data?.text || 'Could not save that. Try again.';
+      P.other = { ...P.other, msg: why };
+      plannerRenderWaiting(P.props, P.checks);
+      return;
+    }
+    P.other = null;
+    plannerLoad();
+  }
+
+  // ---- Quick add (Brain Calendar #69): one box, plain words ----
+  async function plannerQuickAdd() {
+    const text = el('plannerQuick').value.trim();
+    if (!text) { el('plannerQuick').focus(); return; }
+    const btn = el('plannerQuickBtn'); btn.disabled = true;
+    el('plannerQuickMsg').innerHTML = '<div class="pl-when">Adding…</div>';
+    try {
+      const { data, error } = await api({ action: 'quick-add', text });
+      if (error || !data?.ok) { el('plannerQuickMsg').innerHTML = '<div class="msg err">Could not add that. Try again.</div>'; return; }
+      el('plannerQuick').value = '';
+      const note = data.understood ? '' : ' (I couldn\'t read a date or time; use "Schedule" on it, or More options.)';
+      el('plannerQuickMsg').innerHTML = `<div class="msg ok">${esc(plannerQuickSummary(data.task) + note)}</div>`;
+      plannerLoad();
+    } finally { btn.disabled = false; }
+  }
+
+  // ---- The Sunday "skipped this week" list (#22), answered here instead of Telegram ----
+  async function plannerLoadSkipped() {
+    try {
+      const { data: rows } = await sb.from('bc_settings').select('key,value').eq('key', 'skipped_list');
+      const list = rows && rows[0] ? rows[0].value : null;
+      if (!list || !Array.isArray(list.ids) || !list.ids.length) { el('plannerSkipped').innerHTML = ''; return; }
+      const { data: emails } = await sb.from('bc_emails').select('id,from_name,from_email,subject,feedback').in('id', list.ids);
+      const r = plannerSkippedRows(list, emails || [], new Date());
+      el('plannerSkipped').innerHTML = r.length ? '<div class="pl-day">Skipped this week <span style="text-transform:none; font-weight:400;">tap one that should have come through</span></div>' +
+        r.map(x => `<div class="pl-item"><div class="pl-body"><div class="pl-title">${esc(x.from)}</div><div class="pl-when">${esc(x.subject)}</div>
+          <div class="pl-actions">${x.learned ? '<span class="pl-chip">Will come through from now on</span>' : `<button class="secondary" data-skipped="${x.n}">Should have come through</button>`}</div></div></div>`).join('') : '';
+    } catch { el('plannerSkipped').innerHTML = ''; }
+  }
+
+  async function plannerLearnSkipped(n) {
+    const { data } = await api({ action: 'learn-skipped', numbers: [Number(n)] });
+    if (!data?.ok) plannerNote('Could not save that. Try again.');
+    else plannerNote(esc(`Got it. Mail from ${data.learned.join(', ')} will come through from now on.`), 'ok');
+    plannerLoadSkipped();
+  }
+
+  // ---- Notifications on this device (Brain Calendar #63) ----
+  function plannerDevice() {
+    const ua = navigator.userAgent || '';
+    return {
+      ios: /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+      standalone: (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true,
+      supported: 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
+      permission: 'Notification' in window ? Notification.permission : 'default',
+    };
+  }
+
+  async function plannerSwReg() {
+    if (!('serviceWorker' in navigator)) return null;
+    const reg = await navigator.serviceWorker.getRegistration();
+    return reg || null;
+  }
+
+  async function plannerRenderPush(refresh) {
+    const d = plannerDevice();
+    let sub = null;
+    try { const reg = d.supported ? await plannerSwReg() : null; sub = reg ? await reg.pushManager.getSubscription() : null; } catch { /* no service worker (preview) */ }
+    // Tell the server about this device again on each visit, so a renewed subscription isn't lost.
+    if (sub && refresh) api({ action: 'push-subscribe', subscription: sub.toJSON(), user_agent: navigator.userAgent }).catch(() => {});
+    const s = plannerPushStatus({ ...d, subscribed: !!sub });
+    const buttons = (s.canTurnOn ? '<button id="plannerPushOn">Turn on notifications</button>' : '') +
+      (s.canTest ? '<button class="secondary" id="plannerPushTest">Send test</button><button class="secondary" id="plannerPushOff">Turn off here</button>' : '');
+    const html = `<div class="pl-body"><div class="pl-when">${esc(s.text)}</div>${buttons ? `<div class="pl-actions">${buttons}</div>` : ''}<div id="plannerPushMsg"></div></div>`;
+    el('plannerPush').innerHTML = s.canTest
+      ? `<details class="card" style="margin-bottom:8px;"><summary style="cursor:pointer; font-size:13px; color:#999;">Notifications: on</summary>${html}</details>`
+      : `<div class="pl-item">${html}</div>`;
+  }
+
+  async function plannerPushOn() {
+    const msg = t => { const m = el('plannerPushMsg'); if (m) m.innerHTML = t; };
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { await plannerRenderPush(); return; }
+      const { data: cfg } = await api({ action: 'push-config' });
+      if (!cfg?.publicKey) { msg('<div class="msg err">Notifications aren\'t set up on the server yet (VAPID keys missing).</div>'); return; }
+      const reg = await plannerSwReg();
+      if (!reg) { msg('<div class="msg err">The app\'s service worker isn\'t running. Reload the app and try again.</div>'); return; }
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: plannerB64ToBytes(cfg.publicKey) });
+      const { data } = await api({ action: 'push-subscribe', subscription: sub.toJSON(), user_agent: navigator.userAgent });
+      if (!data?.ok) { msg('<div class="msg err">Could not save this device. Try again.</div>'); return; }
+      await plannerRenderPush();
+      const m = el('plannerPushMsg'); if (m) m.innerHTML = '<div class="msg ok">Notifications are on. Tap "Send test" to try one.</div>';
+    } catch (err) {
+      msg(`<div class="msg err">${esc(err.message || 'Could not turn notifications on.')}</div>`);
+    }
+  }
+
+  async function plannerPushTest() {
+    const { data } = await api({ action: 'push-test' });
+    const m = el('plannerPushMsg');
+    if (m) m.innerHTML = data?.ok ? `<div class="msg ok">Sent to ${data.sent} ${data.sent === 1 ? 'device' : 'devices'}. It should arrive in a few seconds.</div>` : '<div class="msg err">The test didn\'t go out. Try turning notifications off and on again.</div>';
+  }
+
+  async function plannerPushOff() {
+    try {
+      const reg = await plannerSwReg();
+      const sub = reg ? await reg.pushManager.getSubscription() : null;
+      if (sub) { await api({ action: 'push-unsubscribe', endpoint: sub.endpoint }); await sub.unsubscribe(); }
+    } catch { /* already off */ }
+    plannerRenderPush();
+  }
+
   async function plannerAdd() {
     const title = el('plannerTitle').value;
     if (!title.trim()) return;
@@ -396,6 +584,14 @@ if (typeof document !== 'undefined') {
   document.addEventListener('click', e => {
     const d = e.target.dataset || {};
     if (e.target.id === 'plannerAddBtn') plannerAdd();
+    if (e.target.id === 'plannerQuickBtn') plannerQuickAdd();
+    if (e.target.id === 'plannerPushOn') plannerPushOn();
+    if (e.target.id === 'plannerPushTest') plannerPushTest();
+    if (e.target.id === 'plannerPushOff') plannerPushOff();
+    if (d.other) plannerOtherTimes(d.other);
+    if (d.otherPick) { const [id, i] = d.otherPick.split(':'); plannerChooseTime(id, { index: Number(i) }); }
+    if (d.otherType) plannerChooseTime(d.otherType, { text: (el('plannerOtherText') || {}).value || '' });
+    if (d.skipped) plannerLearnSkipped(d.skipped);
     if (e.target.id === 'plannerNoteSave') plannerSaveNote();
     if (e.target.id === 'plannerNoteSkip') { P.noteFor = null; plannerLoad(); }
     if (e.target.id === 'plannerAddGoal') plannerAddGoal();
@@ -413,6 +609,8 @@ if (typeof document !== 'undefined') {
   });
   document.addEventListener('keydown', e => {
     if (e.target.id === 'plannerTitle' && e.key === 'Enter') plannerAdd();
+    if (e.target.id === 'plannerQuick' && e.key === 'Enter') plannerQuickAdd();
+    if (e.target.id === 'plannerOtherText' && e.key === 'Enter' && P.other) plannerChooseTime(P.other.id, { text: e.target.value });
     if (e.target.id === 'plannerNoteText' && e.key === 'Enter') plannerSaveNote();
   });
 

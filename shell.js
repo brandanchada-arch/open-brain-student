@@ -191,8 +191,14 @@
   // Old code (and Telegram links) still say showTab('jobs') etc.; it maps to the new screens.
   window.showTab = (name) => go(name, { load: false });
 
+  // "#jobs/<id>" (from a job notification) opens the Jobs tab with that job shown.
+  function splitHash(hash) {
+    const [base, id] = String(hash || '').replace('#', '').split('/');
+    if (base === 'jobs' && id) window.obJobOpen = id;
+    return base;
+  }
   function routeFromHash() {
-    const h = (location.hash || '').replace('#', '');
+    const h = splitHash(location.hash);
     go(SCREEN_OF[h] ? h : 'today', { top: true });
   }
 
@@ -202,9 +208,18 @@
   }));
   document.querySelectorAll('.chip[data-sub]').forEach(c => c.addEventListener('click', () => go(c.dataset.sub)));
   window.addEventListener('hashchange', () => {
-    const h = location.hash.replace('#', '');
-    if (SCREEN_OF[h] && (SUB_ALIAS[h] || h) !== (current.sub || current.screen)) go(h, { top: true });
+    const job = /^#jobs\/./.test(location.hash);
+    const h = splitHash(location.hash);
+    if (SCREEN_OF[h] && (job || (SUB_ALIAS[h] || h) !== (current.sub || current.screen))) go(h, { top: true });
   });
+  // A tapped notification while the app is already open: sw.js sends the place to open.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      if (!e.data || e.data.type !== 'open' || typeof e.data.url !== 'string') return;
+      const u = new URL(e.data.url, location.href);
+      if (u.origin === location.origin && u.hash) location.hash = u.hash;
+    });
+  }
 
   // ---------- iPhone feel ----------
   // Hide the tab bar while the keyboard is up, so it doesn't float over what you type.
