@@ -59,7 +59,7 @@ Deno.serve(async (req: Request) => {
         await sendTelegramMessage(chatId, "Send /search followed by what you're looking for.");
       } else {
         const res = await supabaseRequest(
-          `thoughts?user_id=eq.${OWNER_USER_ID}&content=ilike.*${encodeURIComponent(query)}*&order=created_at.desc&limit=5`
+          `thoughts?user_id=eq.${OWNER_USER_ID}&archived_at=is.null&content=ilike.*${encodeURIComponent(query)}*&order=created_at.desc&limit=5`
         );
         const results = await res.json();
 
@@ -74,7 +74,7 @@ Deno.serve(async (req: Request) => {
       }
     } else if (text.startsWith("/recent")) {
       const res = await supabaseRequest(
-        `thoughts?user_id=eq.${OWNER_USER_ID}&order=created_at.desc&limit=5`
+        `thoughts?user_id=eq.${OWNER_USER_ID}&archived_at=is.null&order=created_at.desc&limit=5`
       );
       const results = await res.json();
 
