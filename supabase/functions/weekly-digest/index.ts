@@ -1,13 +1,14 @@
 // ─────────────────────────────────────────────────────────────
-// weekly-digest: reads the last 7 days of thoughts, asks the LLM
-// gateway for a summary, and saves it back as a thought with
-// category 'digest'. Triggered every Sunday by pg_cron.
+// weekly-digest: reads the last 7 days of (non-archived) thoughts, asks
+// the LLM gateway for a summary, and saves it to the Reference Library
+// (table `library`, doc_type 'digest'). Triggered every Sunday by pg_cron.
 //
 // Every AI call goes through call-llm. This file never talks to an
 // AI company directly.
 // ─────────────────────────────────────────────────────────────
 
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { indexLibraryEntry, saveLibraryEntry } from "../_shared/library.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -119,6 +120,7 @@ Deno.serve(async (req) => {
       .from("thoughts")
       .select("id, content, summary, category, user_id, created_at")
       .gte("created_at", periodStart.toISOString())
+      .is("archived_at", null) // moved-to-library thoughts are not part of the brain anymore
       .or("category.is.null,category.neq.digest")
       .order("created_at", { ascending: true });
 
@@ -171,32 +173,31 @@ Deno.serve(async (req) => {
       throw new Error(`call-llm returned ${llmRes.status}: ${JSON.stringify(llm)}`);
     }
 
-    // 4. Save the digest as a thought
+    // 4. Save the digest to the Reference Library (doc_type "digest"), not the brain,
+    //    so digests never crowd Brandan's own thoughts out of search.
     const heading =
       `Weekly digest: ${formatDay(periodStart)} – ${formatDay(periodEnd)} (${thoughts.length} thoughts)`;
+    if (!userId) throw new Error("Could not tell whose brain this is, so the digest was not saved");
 
-    const { data: saved, error: saveError } = await admin
-      .from("thoughts")
-      .upsert({
-        content: `${heading}\n\n${llm.text.trim()}`,
-        category: "digest",
-        tags: ["weekly-digest"],
-        summary: heading,
-        user_id: userId,
-        enriched_at: periodEnd.toISOString(),
-        metadata: {
-          kind: "weekly-digest",
-          period_start: periodStart.toISOString(),
-          period_end: periodEnd.toISOString(),
-          thought_count: thoughts.length,
-        },
-      }, { onConflict: "dedup_key,user_id", ignoreDuplicates: false })
-      .select("id")
-      .single();
+    const content = `${heading}\n\n${llm.text.trim()}`;
+    // Same title on a re-run updates that week's digest instead of adding a copy.
+    const saved = await saveLibraryEntry(admin, {
+      user_id: userId,
+      title: heading,
+      content,
+      doc_type: "digest",
+      tags: ["weekly-digest"],
+      summary: heading,
+      metadata: {
+        kind: "weekly-digest",
+        period_start: periodStart.toISOString(),
+        period_end: periodEnd.toISOString(),
+        thought_count: thoughts.length,
+      },
+    }, { matchTitle: true });
+    await indexLibraryEntry(admin, saved.id, content, "weekly-digest");
 
-    if (saveError) throw new Error(`Could not save digest: ${saveError.message}`);
-
-    console.log(`Saved digest ${saved.id} covering ${thoughts.length} thoughts`);
+    console.log(`Saved digest ${saved.id} to the library covering ${thoughts.length} thoughts`);
     return reply({ ok: true, digestId: saved.id, thoughtCount: thoughts.length });
   } catch (err) {
     console.error("weekly-digest failed:", err);

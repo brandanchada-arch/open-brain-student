@@ -35,9 +35,9 @@ function gqSteps(qs, idx, isDone) {
 }
 const GQ_MIC = '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg>';
 
-async function gqFetch(fn) {
+async function gqFetch(fn, body = {}) {
   if (!navigator.onLine) throw new Error('New questions need a connection. Your last set is still here.');
-  const { data, error } = await sb.functions.invoke(fn, { body: {} });
+  const { data, error } = await sb.functions.invoke(fn, { body });
   if (error) {
     // supabase-js hides the function's own error message; read it from the response.
     let reason = '';
@@ -205,7 +205,7 @@ function renderQuiz(state) {
   if (state.idx === undefined) { const i = qs.findIndex(x => !quizDone(x)); state.idx = i === -1 ? qs.length : i; }
   const right = qs.filter(x => x.result === 'got').length;
   const done = qs.filter(quizDone).length;
-  meta.textContent = `From your class notes · ${gqWhen(state.at)}${done ? ` · ${right}/${done} right` : ''}`;
+  meta.textContent = `From your ${state.label ? 'library: ' + state.label : 'class notes'} · ${gqWhen(state.at)}${done ? ` · ${right}/${done} right` : ''}`;
   if (state.idx >= qs.length) {
     btn.className = ''; btn.textContent = 'New quiz';
     const missed = qs.filter(x => x.result === 'miss');
@@ -262,3 +262,13 @@ document.getElementById('quizList').addEventListener('click', (e) => {
   gqWrite(GQ_CACHE.quiz, state); renderQuiz(state);
 });
 document.getElementById('quizBtn').addEventListener('click', () => loadQuiz(true));
+
+// "Quiz me" from the Library tab: 3 questions from random library notes for a course/topic.
+// Throws on failure so the Library tab can show the message where you tapped.
+window.obQuizFor = async function (course, topic) {
+  const data = await gqFetch('daily-quiz', { course: course || null, topic: topic || null });
+  if (data.skipped) throw new Error(data.note || 'No notes for that course or topic yet.');
+  const label = [course, topic].filter(Boolean).join(' · ');
+  gqWrite(GQ_CACHE.quiz, { at: Date.now(), idx: 0, label, questions: data.questions.map(q => ({ course: q.course, q: q.q, a: q.a })) });
+  obGo('quiz', { top: true });
+};

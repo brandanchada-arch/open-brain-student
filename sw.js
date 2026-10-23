@@ -6,9 +6,9 @@
 //   lists are kept by shell.js on the phone itself, trimmed and only for you.
 // - Brain Calendar notifications: shows pushed messages and opens the right tab when tapped.
 // Bump VERSION when you change this file so phones pick up the new one.
-const VERSION = 'ob-2026-10-21-push1';
+const VERSION = 'ob-2026-10-22-library1';
 const SHELL = [
-  './', 'index.html', 'shell.js', 'graph.js', 'gaps.js', 'planner.js', 'jobs.js', 'config.js',
+  './', 'index.html', 'shell.js', 'graph.js', 'gaps.js', 'library.js', 'planner.js', 'jobs.js', 'config.js',
   'manifest.json', 'icon-192.png', 'icon-512.png',
 ];
 const CDN_PRELOAD = ['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4'];

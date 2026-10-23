@@ -161,6 +161,14 @@
 
   /* ---------- Study (gaps.js) ---------- */
   .gq-meta { font-size: 14px; color: var(--muted); margin: 0 2px 12px; }
+  /* Study: Library */
+  [hidden] { display: none !important; }
+  .lib-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .lib-filters select:last-child { grid-column: 1 / -1; }
+  .lib-item { cursor: pointer; }
+  .lib-title { font-size: 16px; font-weight: 650; line-height: 1.35; }
+  .lib-reader { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px; margin-bottom: 14px; }
+  .lib-reader .lib-text { white-space: pre-wrap; line-height: 1.55; font-size: 15px; margin-top: 12px; overflow-wrap: anywhere; }
   .gq-steps { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
   .gq-step { width: 28px; height: 4px; border-radius: 99px; background: var(--line-2); }
   .gq-step.done { background: #8A6A3A; }
@@ -366,7 +374,7 @@
       </div>
       <label>Paste article text</label>
       <textarea id="urlText" style="min-height:150px;"></textarea>
-      <button id="urlSaveBtn" style="width:100%; margin-top:12px;">Save Thought</button>
+      <button id="urlSaveBtn" style="width:100%; margin-top:12px;">Save to Library</button>
       <div id="urlMsg"></div>
     </div>
     </div>
@@ -384,7 +392,7 @@
         <a id="ytTranscriptLink" href="#" target="_blank"><button class="secondary" type="button">Open Video →</button></a>
         <label>Paste transcript here</label>
         <textarea id="ytTranscriptText" placeholder="Paste the transcript text..."></textarea>
-        <button id="ytSaveBtn" style="width:100%; margin-top:12px;">Save Thought</button>
+        <button id="ytSaveBtn" style="width:100%; margin-top:12px;">Save to Library</button>
       </div>
       <div id="ytMsg"></div>
     </div>
@@ -402,7 +410,10 @@
       <div id="pdfReviewArea" style="display:none;">
         <label>Extracted text (review before saving)</label>
         <textarea id="pdfText" style="min-height:200px;"></textarea>
-        <button id="pdfSaveBtn" style="width:100%; margin-top:12px;">Save Thought</button>
+        <label for="pdfCourse">Course (optional, e.g. BUS-485)</label>
+        <input type="text" id="pdfCourse" placeholder="BUS-485" autocapitalize="characters">
+        <button id="pdfSaveBtn" style="width:100%; margin-top:12px;">Save to Library</button>
+        <div class="hint">PDFs go to your Reference Library (Study → Library), not your thoughts.</div>
       </div>
       <div id="pdfMsg"></div>
     </div>
@@ -415,6 +426,7 @@
     <div class="chips" role="tablist">
       <button class="chip active" data-sub="gaps" type="button">Gaps</button>
       <button class="chip" data-sub="quiz" type="button">Quiz</button>
+      <button class="chip" data-sub="library" type="button">Library</button>
     </div>
     <div class="sub active" id="panel-gaps">
       <div id="gapsMeta" class="gq-meta"></div>
@@ -427,6 +439,22 @@
       <div id="quizMsg"></div>
       <div id="quizList"></div>
       <button id="quizBtn" class="secondary" style="width:100%; margin-top:14px;">New quiz</button>
+    </div>
+    <div class="sub" id="panel-library">
+      <div class="lib-filters">
+        <select id="libCourse" aria-label="Course"><option value="">All courses</option></select>
+        <select id="libType" aria-label="Type"><option value="">All types</option></select>
+        <select id="libTopic" aria-label="Topic"><option value="">All topics</option></select>
+      </div>
+      <form class="search-row" id="libSearchForm" role="search">
+        <input type="search" id="libSearchInput" placeholder="Search your library..." enterkeyhint="search" aria-label="Search your library">
+        <button type="submit">Search</button>
+      </form>
+      <button id="libQuizBtn" class="secondary" type="button" style="width:100%; margin-top:10px;">Quiz me</button>
+      <div id="libMeta" class="gq-meta" style="margin-top:12px;"></div>
+      <div id="libMsg"></div>
+      <div id="libReader" class="lib-reader" hidden></div>
+      <div id="libList"></div>
     </div>
   </section>
 
@@ -654,7 +682,7 @@ document.getElementById('ytLoadBtn').addEventListener('click', async () => {
     const { data, error } = await sb.functions.invoke('capture-youtube', { body: { url } });
     if (error) throw error;
     if (!data.ok) throw new Error(data.error || 'Could not capture that video.');
-    showMsg(msgEl, `Saved: ${data.title}${data.has_transcript ? '' : ' (no captions found — used description)'}`, true);
+    showMsg(msgEl, `Saved to your library: ${escapeHtml(data.title)}${data.has_transcript ? '' : ' (no captions found — used description)'}`, true);
     document.getElementById('ytUrl').value = '';
     document.getElementById('ytPreview').innerHTML = '';
     document.getElementById('ytTranscriptArea').style.display = 'none';
@@ -668,21 +696,16 @@ document.getElementById('ytSaveBtn').addEventListener('click', async () => {
   const msgEl = document.getElementById('ytMsg');
   if (!transcript) { showMsg(msgEl, 'Paste the transcript first.', false); return; }
   try {
+    // Transcripts go to the Reference Library; save-library adds the embedding + chunks.
     const content = `📹 YouTube: ${currentYtTitle}\n\n${transcript}`;
-    const { data: thought, error } = await sb.from('thoughts')
-              .upsert({ content, user_id: currentUser.id, metadata: { video_id: currentYtId } }, { onConflict: 'dedup_key,user_id', ignoreDuplicates: false })
-      .select().single();
+    const { data, error } = await sb.functions.invoke('save-library', { body: {
+      title: currentYtTitle || 'YouTube transcript', content, doc_type: 'transcript', source: 'youtube',
+      source_url: currentYtId ? `https://www.youtube.com/watch?v=${currentYtId}` : null,
+      metadata: { video_id: currentYtId },
+    } });
     if (error) throw error;
-    try {
-      await sb.from('thought_sources').insert({
-        thought_id: thought.id, user_id: currentUser.id,
-        source_text: transcript, source_kind: 'youtube_transcript',
-        char_count: transcript.length, truncated: false
-      });
-    } catch (srcErr) {
-      console.warn('thought_sources insert failed (non-fatal):', srcErr);
-    }
-    showMsg(msgEl, 'Saved!', true);
+    if (!data?.ok) throw new Error(data?.error || 'Save failed.');
+    showMsg(msgEl, 'Saved to your library!', true);
     document.getElementById('ytTranscriptText').value = '';
     document.getElementById('ytUrl').value = '';
     document.getElementById('ytTranscriptArea').style.display = 'none';
@@ -747,11 +770,18 @@ document.getElementById('pdfSaveBtn').addEventListener('click', async () => {
   const msgEl = document.getElementById('pdfMsg');
   if (!text) { showMsg(msgEl, 'Nothing to save.', false); return; }
   try {
+    // PDFs go to the Reference Library; save-library adds the embedding + chunks.
     const content = `📄 PDF: ${currentPdfName}\n\n${text}`;
-          const { error } = await sb.from('thoughts').upsert({ content, user_id: currentUser.id }, { onConflict: 'dedup_key,user_id', ignoreDuplicates: false });
+    const course = document.getElementById('pdfCourse').value.trim();
+    const { data, error } = await sb.functions.invoke('save-library', { body: {
+      title: currentPdfName.replace(/\.pdf$/i, ''), content, doc_type: 'reference', course: course || null,
+      source: 'pdf', metadata: { file_name: currentPdfName },
+    } });
     if (error) throw error;
-    showMsg(msgEl, 'Saved!', true);
+    if (!data?.ok) throw new Error(data?.error || 'Save failed.');
+    showMsg(msgEl, 'Saved to your library!', true);
     document.getElementById('pdfText').value = '';
+    document.getElementById('pdfCourse').value = '';
     document.getElementById('pdfReviewArea').style.display = 'none';
   } catch (err) {
     showMsg(msgEl, err.message || 'Save failed.', false);
@@ -767,7 +797,7 @@ document.getElementById('urlSaveBtn').addEventListener('click', async () => {
     const { data, error } = await sb.functions.invoke('capture-url', { body: { url } });
     if (error) throw error;
     if (!data.ok) throw new Error(data.error || 'Could not capture that page.');
-    showMsg(msgEl, `Saved: ${data.title}`, true);
+    showMsg(msgEl, `Saved to your library: ${escapeHtml(data.title)}`, true);
     document.getElementById('urlInput').value = '';
     document.getElementById('urlText').value = '';
   } catch (err) {
@@ -846,7 +876,8 @@ async function loadRecent() {
   const listEl = document.getElementById('recentList');
   try {
     const { data, error } = await sb.from('thoughts')
-      .select('id, created_at, content').order('created_at', { ascending: false }).limit(20);
+      .select('id, created_at, content').is('archived_at', null)   // moved-to-library thoughts stay hidden
+      .order('created_at', { ascending: false }).limit(20);
     if (error) throw error;
     renderThoughtCards(listEl, data);
     // Offline copy: first 600 characters of each, never whole transcripts.
@@ -867,5 +898,6 @@ if ('serviceWorker' in navigator) {
 <script src="shell.js"></script>
 <script src="graph.js"></script>
 <script src="gaps.js"></script>
+<script src="library.js"></script>
 </body>
 </html>

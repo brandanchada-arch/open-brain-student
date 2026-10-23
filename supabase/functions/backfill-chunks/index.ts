@@ -8,6 +8,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fillMissingChunkEmbeddings, saveThoughtChunksSafe } from "../_shared/thought-chunks.ts";
+import { fillMissingLibraryEmbeddings, saveLibraryChunks } from "../_shared/library.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -54,6 +55,33 @@ Deno.serve(async (req) => {
         .is("embedding", null);
       if (countError) throw new Error(`count failed: ${countError.message}`);
       return json({ attempted, filled, missing: count ?? 0 });
+    }
+
+    // Library mode: same job for the Reference Library. Fills missing entry/chunk
+    // embeddings, then chunks long library entries that have no chunks yet.
+    // Run {"library": true} in a loop until "remaining" is 0.
+    if (body.library === true) {
+      const { attempted, filled } = await fillMissingLibraryEmbeddings(admin, 20);
+      const { data: libRows, error: libErr } = await admin
+        .from("library_needing_chunks")
+        .select("id, chars")
+        .order("chars", { ascending: false })
+        .limit(Math.min(batchSize, 3));
+      if (libErr) throw new Error(`library query failed: ${libErr.message}`);
+      let libChunked = 0;
+      for (const row of libRows ?? []) {
+        const { data: entry } = await admin.from("library").select("content").eq("id", row.id).single();
+        if (!entry) continue;
+        try {
+          if (await saveLibraryChunks(admin, row.id, entry.content) > 0) libChunked++;
+        } catch (err) {
+          console.error(`Chunking library entry ${row.id} failed:`, String(err));
+        }
+      }
+      const { count: libLeft } = await admin
+        .from("library_needing_chunks")
+        .select("id", { count: "exact", head: true });
+      return json({ embeddings_attempted: attempted, embeddings_filled: filled, chunked: libChunked, remaining: libLeft ?? 0 });
     }
 
     // Biggest documents first: they matter most if the run gets interrupted.

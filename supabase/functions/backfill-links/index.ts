@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
     .from("thoughts")
     .select("id, user_id, embedding")
     .not("embedding", "is", null)
+    .is("archived_at", null)
     .order("created_at", { ascending: true })
     .range(offset, offset + batchSize - 1);
 
@@ -122,7 +123,8 @@ Deno.serve(async (req) => {
   const { count: total } = await admin
     .from("thoughts")
     .select("id", { count: "exact", head: true })
-    .not("embedding", "is", null);
+    .not("embedding", "is", null)
+    .is("archived_at", null);
 
   const remaining = Math.max((total ?? 0) - offsetNext, 0);
 

@@ -81,13 +81,50 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const query = typeof body?.query === "string" ? body.query.trim() : "";
-    if (!query) {
+    const libraryMode = body?.library === true;
+    if (!query && !libraryMode) {
       return jsonResponse({ ok: false, error: "A query is required" }, 400);
     }
     const requested = Number(body?.limit);
     const limit = Number.isFinite(requested) && requested > 0
       ? Math.min(Math.floor(requested), MAX_LIMIT)
       : DEFAULT_LIMIT;
+
+    // Library tab: search the Reference Library instead of the brain.
+    // Filters (course / doc_type / topic) are optional; with no query it lists the newest entries.
+    if (libraryMode) {
+      const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+      const libEmbedding = query ? await generateEmbedding(query) : null;
+      const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+      const { data, error } = await admin.rpc("search_library", {
+        query_text: query,
+        p_user_id: user.id,
+        query_embedding: libEmbedding,
+        match_threshold: 0.3,
+        match_count: limit,
+        p_course: str(body.course),
+        p_doc_type: str(body.doc_type),
+        p_topic: str(body.topic),
+      });
+      if (error) throw error;
+      return jsonResponse({
+        ok: true,
+        mode: libEmbedding ? "hybrid" : "keyword",
+        results: (data ?? []).map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          doc_type: r.doc_type,
+          course: r.course,
+          topic: r.topic,
+          content: String(r.content ?? "").slice(0, MAX_CONTENT_CHARS),
+          content_length: String(r.content ?? "").length,
+          created_at: r.created_at,
+          similarity: r.similarity,
+          matched_chunk: r.matched_chunk,
+          match_source: r.match_source,
+        })),
+      });
+    }
 
     // A failed embedding is not an error: search just runs keyword-only.
     const queryEmbedding = await generateEmbedding(query);

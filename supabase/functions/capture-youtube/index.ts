@@ -1,7 +1,8 @@
 // ============================================================================
 // CAPTURE-YOUTUBE
 // ============================================================================
-// Paste a YouTube link, get the spoken transcript saved into your brain.
+// Paste a YouTube link, get the spoken transcript saved into your Reference
+// Library (table `library`, doc_type "transcript").
 //
 // WHY THIS FILE IS MORE INVOLVED — worth understanding before changing it:
 //
@@ -25,6 +26,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { indexLibraryEntry, saveLibraryEntry } from "../_shared/library.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -262,12 +264,17 @@ Deno.serve(async (req: Request) => {
     const label = result.hasTranscript ? "" : "(No captions were available — this is the video description.)\n\n";
     const content = `📹 ${title}\n\n${label}${result.content.slice(0, 4000)}`;
 
+    // Transcripts are reference material: they go to the Reference Library
+    // (doc_type "transcript"), not the brain, and get their embedding + chunks here.
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-    const { data: saved, error: insertError } = await admin
-      .from("thoughts")
-      .upsert({
+    let saved: { id: string };
+    try {
+      saved = await saveLibraryEntry(admin, {
         user_id: user.id,
+        title,
         content,
+        doc_type: "transcript",
+        source_url: videoUrl,
         metadata: {
           source: "youtube",
           title,
@@ -276,18 +283,17 @@ Deno.serve(async (req: Request) => {
           has_transcript: result.hasTranscript,
           fetched_via: result.source,
         },
-      }, { onConflict: "dedup_key,user_id", ignoreDuplicates: false })
-      .select("id")
-      .single();
-
-    if (insertError) {
-      console.error("[youtube] Insert failed:", insertError.message);
+      });
+    } catch (insertError) {
+      console.error("[youtube] Insert failed:", String(insertError));
       return jsonResponse({ ok: false, error: "Could not save that video." }, 500);
     }
+    await indexLibraryEntry(admin, saved.id, content, "capture-youtube");
 
     return jsonResponse({
       ok: true,
       id: saved.id,
+      library: true,
       title,
       has_transcript: result.hasTranscript,
       fetched_via: result.source,

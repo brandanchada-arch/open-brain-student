@@ -18,7 +18,7 @@ import { chunkText, shouldChunk } from './chunking.ts'
  * generates them through its own generate-embedding edge function (Level 6). Returns null on any
  * failure, so a failed chunk embedding degrades to keyword-only instead of losing the chunk.
  */
-async function generateEmbedding(
+export async function generateEmbedding(
   text: string,
   _opts?: { userId?: string; source?: string },
 ): Promise<number[] | null> {

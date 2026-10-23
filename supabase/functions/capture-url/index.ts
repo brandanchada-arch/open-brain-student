@@ -2,7 +2,7 @@
 // CAPTURE-URL
 // ============================================================================
 // Paste any article or web page link and the readable text gets pulled out
-// and saved.
+// and saved to the Reference Library (table `library`, doc_type "article").
 //
 // WHY THIS RUNS ON THE SERVER: a web browser is not allowed to fetch pages
 // from other websites — that restriction is called CORS and it exists for
@@ -11,6 +11,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { indexLibraryEntry, saveLibraryEntry } from "../_shared/library.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -136,25 +137,30 @@ Deno.serve(async (req: Request) => {
     // adds automatic summarizing once an AI key is configured.
     const content = `🔗 ${title}\n${parsed.hostname}\n\n${text.slice(0, 4000)}`;
 
+    // Articles are reference material, so they go to the Reference Library,
+    // not the brain. The library row gets its embedding + chunks right here
+    // (the enrich-thought webhook only runs for thoughts).
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-    const { data: saved, error: insertError } = await admin
-      .from("thoughts")
-      .upsert({
+    let saved: { id: string };
+    try {
+      saved = await saveLibraryEntry(admin, {
         user_id: user.id,
+        title,
         content,
+        doc_type: "article",
+        source_url: parsed.toString(),
         metadata: { source: "url", title, url: parsed.toString(), hostname: parsed.hostname },
-      }, { onConflict: "dedup_key,user_id", ignoreDuplicates: false })
-      .select("id")
-      .single();
-
-    if (insertError) {
-      console.error("[url] Insert failed:", insertError.message);
+      });
+    } catch (insertError) {
+      console.error("[url] Insert failed:", String(insertError));
       return jsonResponse({ ok: false, error: "Could not save that page." }, 500);
     }
+    await indexLibraryEntry(admin, saved.id, content, "capture-url");
 
     return jsonResponse({
       ok: true,
       id: saved.id,
+      library: true,
       title,
       hostname: parsed.hostname,
       preview: content.slice(0, 240) + "…",

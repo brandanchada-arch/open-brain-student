@@ -1,9 +1,11 @@
 // open-brain-mcp: an MCP (Model Context Protocol) server exposing your
-// "brain" (the Supabase `thoughts` table) to any MCP-compatible AI client.
+// "brain" (the Supabase `thoughts` table) to any MCP-compatible AI client,
+// plus the Reference Library (`library`: class notes, transcripts, digests).
 //
 // It speaks JSON-RPC 2.0 over HTTP, which is what MCP uses under the hood.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { pickQuizMaterial } from "../_shared/library.ts";
 
 // These come from Supabase automatically — no setup needed.
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected into every
@@ -25,6 +27,8 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 // and how much of each one to preview.
 const MAX_CONNECTED = 5;
 const PREVIEW_CHARS = 200;
+// Reference Library: get_library_entry returns long entries in pages this big.
+const LIBRARY_PAGE_CHARS = 6000;
 
 // Standard CORS headers so browsers/tools calling this from elsewhere don't get blocked.
 const corsHeaders = {
@@ -47,7 +51,9 @@ const TOOLS = [
       "capture that matched — quote it to the user. Each result includes a similarity score " +
       "from 0 to 1 (higher = closer in meaning), plus a 'connected' list: other thoughts " +
       "linked to it in the thought graph. Use the connected thoughts to surface related " +
-      "ideas the user may have forgotten about.",
+      "ideas the user may have forgotten about. This searches only the user's OWN thoughts: " +
+      "class notes, transcripts, articles and weekly digests live in the Reference Library " +
+      "(use search_library). A result with 'from_library' is a takeaway from that library entry.",
     inputSchema: {
       type: "object",
       properties: {
@@ -75,6 +81,73 @@ const TOOLS = [
         content: { type: "string", description: "The text of the thought to save" },
       },
       required: ["content"],
+    },
+  },
+  // ---- Reference Library (2026-10-22): class notes, transcripts, articles, digests ----
+  {
+    name: "search_library",
+    description:
+      "Search the user's REFERENCE LIBRARY (class notes, lecture/video transcripts, articles, " +
+      "simulation data, weekly digests), NOT their own thoughts. Hybrid search by meaning and " +
+      "exact keywords. Optional filters: course (e.g. BUS-485, FIN-451, ECN-460), doc_type " +
+      "(class-notes, transcript, digest, reference, sim-data, personal-doc, article) and topic " +
+      "(matches part of the topic). Use list_library first if you don't know the course or topic " +
+      "names. With only filters and no query, it lists the newest matching entries. Results show " +
+      "the passage that matched; use get_library_entry with the id to read the whole entry.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "What to look for, in plain language (can be empty when filters are given)" },
+        course: { type: "string", description: "Optional course code, e.g. BUS-485" },
+        doc_type: { type: "string", description: "Optional: class-notes, transcript, digest, reference, sim-data, personal-doc, article" },
+        topic: { type: "string", description: "Optional topic (partial match)" },
+        limit: { type: "number", description: "How many results (default 10, max 25)" },
+      },
+    },
+  },
+  {
+    name: "list_library",
+    description:
+      "Show what is in the Reference Library. Without a course: counts by course, by doc_type " +
+      "and by topic. With a course (and optionally doc_type or topic): the list of entries " +
+      "(id, title, type, topic, date), no full text.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        course: { type: "string", description: "Optional course code, e.g. BUS-485" },
+        doc_type: { type: "string", description: "Optional doc_type filter" },
+        topic: { type: "string", description: "Optional topic filter (partial match)" },
+      },
+    },
+  },
+  {
+    name: "get_library_entry",
+    description:
+      `Read one Reference Library entry by id, in pages of about ${LIBRARY_PAGE_CHARS.toLocaleString()} ` +
+      "characters. The reply says how many pages there are; ask for the next page to keep reading.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "The library entry id (from search_library or list_library)" },
+        page: { type: "number", description: "Page number, starting at 1 (default 1)" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "library_quiz_material",
+    description:
+      "Random notes from the Reference Library for a course and/or topic, sized for you to quiz " +
+      "the user. Write questions that test understanding or application (small scenarios or " +
+      "calculations), ask ONE at a time, wait for the answer, then give feedback using only these " +
+      "notes. Call again for fresh material.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        course: { type: "string", description: "Course code, e.g. BUS-485" },
+        topic: { type: "string", description: "Optional topic (partial match)" },
+        count: { type: "number", description: "How many notes (default 5, max 10)" },
+      },
     },
   },
 ];
@@ -168,7 +241,8 @@ async function attachConnections(results: any[]) {
     const { data: others, error: othersError } = await supabase
       .from("thoughts")
       .select("id, content, created_at")
-      .in("id", [...otherIds]);
+      .in("id", [...otherIds])
+      .is("archived_at", null); // moved-to-library thoughts never show as connections
     if (othersError) throw othersError;
 
     const byId = new Map((others ?? []).map((t: any) => [t.id, t]));
@@ -192,6 +266,50 @@ async function attachConnections(results: any[]) {
   }
 }
 
+// Reference Library: thoughts that are takeaways from a library entry get a
+// "from_library" line, e.g. "From library: Week 3 notes (<id>)". Never breaks search.
+async function attachLibraryLinks(results: any[]) {
+  if (results.length === 0) return results;
+  try {
+    const { data: links, error } = await supabase
+      .from("library_links")
+      .select("thought_id, library_id")
+      .in("thought_id", results.map((r) => r.id));
+    if (error) throw error;
+    if (!links?.length) return results;
+
+    const { data: entries, error: entriesError } = await supabase
+      .from("library")
+      .select("id, title")
+      .in("id", [...new Set(links.map((l: any) => l.library_id))]);
+    if (entriesError) throw entriesError;
+    const titles = new Map((entries ?? []).map((e: any) => [e.id, e.title]));
+
+    return results.map((r) => {
+      const mine = links.filter((l: any) => l.thought_id === r.id && titles.has(l.library_id));
+      if (!mine.length) return r;
+      return {
+        ...r,
+        from_library: mine.map((l: any) => `From library: ${titles.get(l.library_id)} (${l.library_id})`).join("; "),
+      };
+    });
+  } catch (err) {
+    console.error("Looking up library links failed:", err);
+    return results;
+  }
+}
+
+function textResult(id: number | string | null, value: unknown) {
+  return new Response(
+    JSON.stringify(rpcResult(id, {
+      content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }],
+    })),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+}
+
+const optStr = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests.
   if (req.method === "OPTIONS") {
@@ -204,6 +322,7 @@ Deno.serve(async (req) => {
 
   // --- Auth check ---
   // We expect: Authorization: Bearer <MCP_ACCESS_KEY>
+  // (Claude Desktop, Claude Code, and the claude.ai/phone connector all send this header)
   const authHeader = req.headers.get("Authorization") ?? "";
   const expected = `Bearer ${MCP_ACCESS_KEY}`;
   if (authHeader !== expected) {
@@ -233,7 +352,7 @@ Deno.serve(async (req) => {
         JSON.stringify(rpcResult(id, {
           protocolVersion: "2024-11-05",
           capabilities: { tools: {} },
-          serverInfo: { name: "open-brain-mcp", version: "1.3.0" },
+          serverInfo: { name: "open-brain-mcp", version: "1.4.0" },
         })),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -304,6 +423,8 @@ Deno.serve(async (req) => {
 
         // Level 6: add each result's graph neighbors
         results = await attachConnections(results);
+        // Reference Library: say which library entry a takeaway came from
+        results = await attachLibraryLinks(results);
 
         return new Response(
           JSON.stringify(rpcResult(id, {
@@ -325,6 +446,7 @@ Deno.serve(async (req) => {
           .from("thoughts")
           .select("id, content, created_at")
           .eq("user_id", OWNER_USER_ID)
+          .is("archived_at", null) // moved-to-library thoughts are hidden
           .order("created_at", { ascending: false })
           .limit(limit);
 
@@ -357,6 +479,127 @@ Deno.serve(async (req) => {
           })),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
+      }
+
+      // ---------------- Reference Library tools ----------------
+      // All of them use the service role, so every query is filtered to OWNER_USER_ID.
+      if (["search_library", "list_library", "get_library_entry", "library_quiz_material"].includes(toolName)) {
+        if (!OWNER_USER_ID) {
+          throw new Error("OWNER_USER_ID is not set in Edge Function secrets");
+        }
+      }
+
+      if (toolName === "search_library") {
+        const query = String(args.query ?? "").trim();
+        const course = optStr(args.course), docType = optStr(args.doc_type), topic = optStr(args.topic);
+        if (!query && !course && !docType && !topic) {
+          throw new Error("Give a query, or at least one filter (course, doc_type, topic)");
+        }
+        const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 25);
+        const queryEmbedding = query ? await generateEmbedding(query) : null;
+        const { data, error } = await supabase.rpc("search_library", {
+          query_text: query,
+          p_user_id: OWNER_USER_ID,
+          query_embedding: queryEmbedding,
+          match_threshold: 0.3,
+          match_count: limit,
+          p_course: course,
+          p_doc_type: docType,
+          p_topic: topic,
+        });
+        if (error) throw error;
+        const results = (data ?? []).map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          doc_type: r.doc_type,
+          course: r.course,
+          topic: r.topic,
+          created_at: r.created_at,
+          ...(r.matched_chunk
+            ? { matched_passage: r.matched_chunk, content_start: preview(r.content) }
+            : { content: truncateLong(r.content) }),
+          similarity: Math.round(r.similarity * 100) / 100,
+          content_length: String(r.content ?? "").length,
+        }));
+        const mode = !query ? "filters only (newest first)"
+          : queryEmbedding ? "hybrid (meaning + keywords)" : "keyword only (fallback: embeddings unavailable)";
+        return textResult(id, { mode, results });
+      }
+
+      if (toolName === "list_library") {
+        const course = optStr(args.course), docType = optStr(args.doc_type), topic = optStr(args.topic);
+        let q = supabase.from("library")
+          .select("id, title, doc_type, course, topic, created_at")
+          .eq("user_id", OWNER_USER_ID)
+          .order("created_at", { ascending: false })
+          .limit(1000);
+        if (course) q = q.ilike("course", course);
+        if (docType) q = q.ilike("doc_type", docType);
+        if (topic) q = q.ilike("topic", `%${topic}%`);
+        const { data, error } = await q;
+        if (error) throw error;
+        const rows = data ?? [];
+        if (course || docType || topic) {
+          return textResult(id, { total: rows.length, entries: rows });
+        }
+        const countBy = (key: string) => {
+          const m: Record<string, number> = {};
+          for (const r of rows as any[]) {
+            const k = r[key] ?? "(none)";
+            m[k] = (m[k] ?? 0) + 1;
+          }
+          return Object.fromEntries(Object.entries(m).sort((a, b) => b[1] - a[1]));
+        };
+        return textResult(id, {
+          total: rows.length,
+          by_course: countBy("course"),
+          by_doc_type: countBy("doc_type"),
+          by_topic: countBy("topic"),
+          tip: "Call list_library with a course to see its entries, or search_library to search.",
+        });
+      }
+
+      if (toolName === "get_library_entry") {
+        const entryId = String(args.id ?? "").trim();
+        if (!/^[0-9a-f-]{36}$/i.test(entryId)) throw new Error("id must be a library entry id (a uuid)");
+        const { data: entry, error } = await supabase
+          .from("library")
+          .select("id, title, content, doc_type, course, topic, tags, summary, source_url, created_at")
+          .eq("id", entryId)
+          .eq("user_id", OWNER_USER_ID)
+          .maybeSingle();
+        if (error) throw error;
+        if (!entry) throw new Error(`No library entry with id ${entryId}`);
+        const content = String(entry.content ?? "");
+        const pages = Math.max(1, Math.ceil(content.length / LIBRARY_PAGE_CHARS));
+        const page = Math.min(Math.max(Math.floor(Number(args.page) || 1), 1), pages);
+        const { content: _all, ...info } = entry;
+        return textResult(id, {
+          ...info,
+          page,
+          pages,
+          total_characters: content.length,
+          content: content.slice((page - 1) * LIBRARY_PAGE_CHARS, page * LIBRARY_PAGE_CHARS),
+          ...(page < pages ? { next: `Call get_library_entry with page ${page + 1} to keep reading.` } : {}),
+        });
+      }
+
+      if (toolName === "library_quiz_material") {
+        const course = optStr(args.course), topic = optStr(args.topic);
+        const count = Math.min(Math.max(Number(args.count) || 5, 1), 10);
+        const notes = await pickQuizMaterial(supabase, OWNER_USER_ID!, {
+          course, topic, maxNotes: count, perNoteChars: 2500, totalChars: 12000,
+        });
+        if (notes.length === 0) {
+          return textResult(id, {
+            notes: [],
+            note: `No library notes for ${[course, topic].filter(Boolean).join(" / ") || "that"}. Try list_library to see course and topic names.`,
+          });
+        }
+        return textResult(id, {
+          how_to_quiz: "Ask one question at a time, wait for the answer, then give feedback from these notes only.",
+          notes: notes.map((n) => ({ id: n.id, title: n.title, course: n.course, topic: n.topic, doc_type: n.doc_type, text: n.text })),
+        });
       }
 
       return new Response(

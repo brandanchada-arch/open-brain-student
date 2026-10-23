@@ -143,7 +143,7 @@
   const SCREEN_OF = {
     today: 'today', jobs: 'jobs', capture: 'capture', study: 'study', brain: 'brain',
     voice: 'capture', url: 'capture', youtube: 'capture', pdf: 'capture',
-    gaps: 'study', quiz: 'study', graph: 'brain', map: 'brain', thoughts: 'brain', search: 'brain', recent: 'brain',
+    gaps: 'study', quiz: 'study', library: 'study', graph: 'brain', map: 'brain', thoughts: 'brain', search: 'brain', recent: 'brain',
   };
   const SUB_ALIAS = { search: 'thoughts', recent: 'thoughts', map: 'graph' };
   const DEFAULT_SUB = { capture: 'voice', study: 'gaps', brain: 'graph' };
@@ -156,6 +156,7 @@
     if (screen === 'jobs' && window.loadJobs) loadJobs();
     if (screen === 'study' && sub === 'gaps' && window.loadGaps) loadGaps(false);
     if (screen === 'study' && sub === 'quiz' && window.loadQuiz) loadQuiz(false);
+    if (screen === 'study' && sub === 'library' && window.loadLibrary) loadLibrary();
     if (screen === 'brain' && sub === 'graph' && window.obGraph) obGraph.show();
     if (screen === 'brain' && sub === 'thoughts' && !$('searchResults').innerHTML) loadRecent();
   }
@@ -271,6 +272,7 @@
         const { data, error } = await sb.from('thoughts')
           .select('id, summary, category, created_at')
           .not('summary', 'is', null)
+          .is('archived_at', null)   // moved-to-library thoughts stay hidden
           .or('category.is.null,category.neq.digest')
           .lt('created_at', before)
           .order('created_at', { ascending: false })
