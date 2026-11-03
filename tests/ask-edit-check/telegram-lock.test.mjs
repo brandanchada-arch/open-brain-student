@@ -3,12 +3,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installFakeDeno, installFakeFetch, FAKE_URL } from './helpers.mjs';
-import { copyFileSync, mkdtempSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, symlinkSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const BOT_FILE = new URL('../../supabase/functions/telegram-bot/index.ts', import.meta.url);
 const TMP = mkdtempSync(join(tmpdir(), 'tg-lock-'));
+// The bot imports ../_shared/ask.ts, so mirror that folder layout next to the copies.
+mkdirSync(join(TMP, 'telegram-bot'));
+symlinkSync(fileURLToPath(new URL('../../supabase/functions/_shared', import.meta.url)), join(TMP, '_shared'));
 let copies = 0;
 
 const OWNER_TG = '111222333';          // made-up Telegram id
@@ -20,7 +24,7 @@ async function loadBot(env) {
     SUPABASE_URL: FAKE_URL, SUPABASE_SERVICE_ROLE_KEY: 'fake-service-key', ...env,
   });
   // A fresh copy of the file each time, so the env above is read again (Node caches modules).
-  const copy = join(TMP, `bot-${++copies}.ts`);
+  const copy = join(TMP, 'telegram-bot', `bot-${++copies}.ts`);
   copyFileSync(BOT_FILE, copy);
   await import(copy);
   return served.handler;
@@ -67,4 +71,36 @@ test('the owner with the right secret can save a thought', async () => {
   const res = await handler(tgRequest(msg(OWNER_TG, 'A made-up thought'), SECRET));
   assert.equal(res.status, 200);
   assert.ok(calls.some((c) => c.url.includes('/rest/v1/thoughts') && c.method === 'POST'));
+});
+
+test('/ask from the owner answers from the notes and lists them', async () => {
+  const sent = [];
+  const calls = installFakeFetch([
+    [(u) => u.includes('/functions/v1/generate-embedding'), () => ({ json: { embedding: [0.1, 0.2] } })],
+    [(u) => u.includes('/rpc/search_thoughts'), () => ({ json: [
+      { id: 't-1', content: 'Made-up note: the study group meets on Tuesdays.', created_at: '2026-10-01T10:00:00Z' },
+    ] })],
+    [(u) => u.includes('/rpc/search_library'), () => ({ json: [] })],
+    [(u) => u.includes('/rest/v1/thoughts?select=id'), () => ({ json: [] })],
+    [(u) => u.includes('/functions/v1/call-llm'), () => ({ json: { text: 'It meets on Tuesdays [T1].' } })],
+    [(u) => u.includes('api.telegram.org'), (_u, body) => { sent.push(body.text); return { json: { ok: true } }; }],
+  ]);
+  const handler = await loadBot({ TELEGRAM_WEBHOOK_SECRET: SECRET, TELEGRAM_OWNER_ID: OWNER_TG });
+  const res = await handler(tgRequest(msg(OWNER_TG, '/ask when does the study group meet?'), SECRET));
+  assert.equal(res.status, 200);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /Tuesdays \[T1\]/);
+  assert.match(sent[0], /Notes used:\n\[T1\]/);
+  const rpc = calls.find((c) => c.url.includes('/rpc/search_thoughts'));
+  assert.equal(rpc.body.p_user_id, '00000000-0000-0000-0000-000000000001', 'uses OWNER_USER_ID');
+  // Nothing was saved as a thought.
+  assert.ok(!calls.some((c) => c.url.includes('/rest/v1/thoughts?on_conflict')));
+});
+
+test('/ask from a stranger does nothing', async () => {
+  const calls = installFakeFetch([[() => true, () => ({})]]);
+  const handler = await loadBot({ TELEGRAM_WEBHOOK_SECRET: SECRET, TELEGRAM_OWNER_ID: OWNER_TG });
+  const res = await handler(tgRequest(msg('999', '/ask what are his secrets?'), SECRET));
+  assert.equal(res.status, 200);
+  assert.equal(calls.length, 0);
 });

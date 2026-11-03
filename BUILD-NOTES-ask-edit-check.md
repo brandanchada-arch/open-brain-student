@@ -10,7 +10,7 @@ tested with fakes in this cloud computer.
 | # | Item | Status |
 |---|------|--------|
 | 1 | Telegram lock | done (lock already existed, kept as is, tests added) |
-| 2 | Ask mode | not started |
+| 2 | Ask mode | done (tested with fakes) |
 | 3 | Edit notes | not started |
 | 4 | Door check | not started |
 
@@ -51,3 +51,47 @@ Result: 4 of 4 pass.
    messages arrive too. If you get nothing within a minute, open
    `https://api.telegram.org/bot<token>/getWebhookInfo` in a browser and read
    `last_error_message` — you'll *know* it's broken, rather than it failing silently.
+
+## 2. Ask mode
+
+**What it does.** You type a question. It searches your thoughts *and* your library with the
+same hybrid search the Search tab uses, sends the best matches to the AI, and the AI writes a
+short answer using only those notes, with labels like [T1] (a thought) or [L2] (a library
+entry). Below the answer you see the notes it used. If nothing matches, or the AI says the notes
+don't cover it, you get a plain "Your notes don't cover this yet… I won't guess." With no
+matches at all, the AI isn't even called (no cost).
+
+**Files**
+- `supabase/functions/_shared/ask.ts` (new): all the logic. No imports, so it's easy to test.
+- `supabase/functions/search-brain/index.ts`: new `{ask: true}` option. User comes from the
+  login token, like the rest of search-brain.
+- `supabase/functions/telegram-bot/index.ts`: new `/ask <question>` command (only works after
+  the lock, using `OWNER_USER_ID`). Long replies are split into pieces under Telegram's
+  4,096-character limit (max 5 pieces). This splitting now also protects `/search` and
+  `/recent`, which used to fail silently on very long thoughts.
+- `ask.js` (new) adds an **Ask** button next to Search in Brain → Thoughts → Search.
+- `ask-edit-check.css` (new): styles for all three features.
+- `index.html`: two lines added before `</body>` (the CSS link and the script).
+
+**Limits (in `ASK_LIMITS`).** Question ≤ 500 characters. Up to 6 thoughts + 4 library
+entries. Each note is cut to 1,200 characters (the passage that matched, for long captures).
+Everything sent to the AI together ≤ 8,000 characters. Answer ≤ 450 tokens, and cut at 2,000
+characters. The prompt tells the AI the notes are data, never instructions.
+
+**Decisions**
+- The AI goes through `call-llm` (source `ask` or `telegram-ask`), so spend is tracked as usual.
+- If the AI cites no labels, all notes sent are listed (safer than listing none).
+- Outdated notes (item 3) are labelled "(outdated)" for the AI and in the list. Before the new
+  SQL runs, that check quietly does nothing.
+
+**Tests** (`tests/ask-edit-check/ask.test.mjs`, plus two in `telegram-lock.test.mjs`): no
+matches → no AI call; NOT_COVERED → plain message; only cited notes listed; context cap holds
+with twenty 250,000-character notes; matched passage used; long answers cut; question cap;
+"data, not instructions" in the prompt; outdated labels; failed embedding still answers; AI
+failure is an error; Telegram splitting (paragraphs, one giant word, runaway reply);
+Telegram `/ask` from the owner uses OWNER_USER_ID and saves nothing; `/ask` from a stranger
+does nothing. Result: all pass.
+
+**Not tested:** `search-brain` itself can't be loaded here (it imports supabase-js from the
+internet, and Deno couldn't be installed in this cloud computer). The Ask button was checked
+in a headless browser with a fake `sb` (see the UI check section further down, if present).

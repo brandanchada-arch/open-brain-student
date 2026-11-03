@@ -1,0 +1,13 @@
+/* Ask answers, note editing and the Library "door check" flag (Nov 3, 2026).
+   Loaded from index.html after the main styles; uses the same colour variables. */
+
+/* ---------- Ask (ask.js) ---------- */
+.ask-card { border-color: var(--accent); }
+.ask-card.ask-uncovered { border-color: var(--line-2); }
+.ask-used { margin-top: 12px; }
+.ask-sources { list-style: none; margin: 0; padding: 0; font-size: 14px; line-height: 1.45; }
+.ask-sources li { padding: 4px 0; border-top: 1px solid var(--line); }
+.ask-ref { font-weight: 700; color: #F2B35E; margin-right: 4px; }
+.ask-kind { display: inline-block; font-size: 12px; font-weight: 600; background: #22283A; color: var(--blue, #9DB4FF); border-radius: 999px; padding: 1px 8px; margin-right: 4px; }
+.ask-kind.ask-old { background: var(--accent-soft); color: #F7CB8C; }
+.ask-date { color: var(--muted); font-size: 13px; }

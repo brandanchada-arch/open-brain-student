@@ -13,6 +13,7 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { askDbFromClient, askNotes, makeAskDeps } from "../_shared/ask.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -89,6 +90,14 @@ Deno.serve(async (req: Request) => {
     const limit = Number.isFinite(requested) && requested > 0
       ? Math.min(Math.floor(requested), MAX_LIMIT)
       : DEFAULT_LIMIT;
+
+    // Ask mode: a short answer written only from the caller's own notes (thoughts + library),
+    // with the notes it used. The user id is the one from the login token above.
+    if (body?.ask === true) {
+      const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+      const result = await askNotes(query, makeAskDeps(askDbFromClient(admin), user.id, SUPABASE_URL, SERVICE_ROLE_KEY, "ask"));
+      return jsonResponse({ ok: true, ask: true, ...result });
+    }
 
     // Library tab: search the Reference Library instead of the brain.
     // Filters (course / doc_type / topic) are optional; with no query it lists the newest entries.

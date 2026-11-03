@@ -1,5 +1,7 @@
 // supabase/functions/telegram-bot/index.ts
 
+import { type AskDb, askNotes, formatAskForText, makeAskDeps, splitForTelegram } from "../_shared/ask.ts";
+
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const OWNER_USER_ID = Deno.env.get("OWNER_USER_ID")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -14,12 +16,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Telegram refuses messages over 4,096 characters, so long replies go out in pieces
+// (at most 5; anything longer is cut short with a note).
 async function sendTelegramMessage(chatId: number, text: string) {
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
-  });
+  for (const part of splitForTelegram(text)) {
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: part }),
+    });
+  }
 }
 
 async function supabaseRequest(path: string, options: RequestInit = {}) {
@@ -35,6 +41,25 @@ async function supabaseRequest(path: string, options: RequestInit = {}) {
   });
   return res;
 }
+
+// The two database calls /ask needs, through the same REST helper as the rest of this file.
+// Always used with OWNER_USER_ID.
+const askDb: AskDb = {
+  rpc: async (fn, args) => {
+    const res = await supabaseRequest(`rpc/${fn}`, { method: "POST", body: JSON.stringify(args) });
+    const data = await res.json().catch(() => null);
+    return res.ok ? { data, error: null } : { data: null, error: { message: data?.message ?? `HTTP ${res.status}` } };
+  },
+  outdatedIds: async (userId, ids) => {
+    if (!ids.length) return new Set<string>();
+    const res = await supabaseRequest(
+      `thoughts?select=id&user_id=eq.${userId}&archived_at=is.null&outdated_at=not.is.null&id=in.(${ids.join(",")})`,
+    );
+    // Before the 2026-11-03 SQL there's no outdated_at column (error): treat nothing as outdated.
+    const data = res.ok ? await res.json().catch(() => []) : [];
+    return new Set((Array.isArray(data) ? data : []).map((r: any) => r.id));
+  },
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -92,7 +117,24 @@ Deno.serve(async (req: Request) => {
     const chatId = message.chat.id;
     const text: string = message.text.trim();
 
-    if (text.startsWith("/search") || text.startsWith("?")) {
+    if (/^\/ask(@\w+)?(\s|$)/.test(text)) {
+      // Ask mode: a short answer written only from your notes, with the notes it used.
+      const question = text.replace(/^\/ask(@\w+)?/, "").trim();
+      if (!question) {
+        await sendTelegramMessage(chatId, "Send /ask followed by a question, e.g. /ask what did I decide about the budget?");
+      } else {
+        try {
+          const result = await askNotes(
+            question,
+            makeAskDeps(askDb, OWNER_USER_ID, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, "telegram-ask"),
+          );
+          await sendTelegramMessage(chatId, formatAskForText(result));
+        } catch (err) {
+          console.error("/ask failed:", err);
+          await sendTelegramMessage(chatId, "Sorry, I couldn't answer that right now. Try again in a minute.");
+        }
+      }
+    } else if (text.startsWith("/search") || text.startsWith("?")) {
       const query = text.replace(/^\/search/, "").replace(/^\?/, "").trim();
 
       if (!query) {
