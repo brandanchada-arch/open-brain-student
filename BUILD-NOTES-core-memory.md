@@ -18,7 +18,7 @@ Claude Desktop reads the core page at the start of each chat through a new MCP t
 | 2 | MCP `get_core` + `add_session_log` | done, 5 tests pass |
 | 3 | weekly-condenser function | done, 10 tests pass |
 | 4 | Topic pages: Current replaced, History grows | done, 2 SQL tests |
-| 5 | Review screen + review-proposal function | in progress |
+| 5 | Review screen + review-proposal function | done, 9 tests pass + UI checked with a fake backend |
 | 6 | Dated SQL file + commented pg_cron job | not started |
 
 ## Setup note
@@ -103,3 +103,37 @@ trailing comma, cut off), proposal checks, sensitive detection. TypeScript check
 - The condenser always proposes the FULL new "Current" text (keeping what is still true), never a fragment.
 
 Tests: in `sql.test.mjs`: "approve replaces Current…" and "topic page History can never shrink…".
+
+## Item 5: Review screen + review-proposal (done)
+
+**New function `supabase/functions/review-proposal/`** (`index.ts` = the door, `handler.ts` = the work).
+
+- The app sends `{action: "approve" | "reject", id}` or `{action: "undo"}`.
+- **Who you are comes from your login token** (anon client + `auth.getUser()`, same as capture-url).
+  A `user_id` in the body is ignored. No token / bad token = 401 and nothing happens.
+- It then calls the database functions from item 1 with the service role:
+  `approve_brain_proposal`, `reject_brain_proposal`, `undo_brain_page_change`. They only touch your rows.
+- Checks before anything runs: action must be one of the three (400 otherwise); approve/reject need an `id`
+  that is a real uuid (400 otherwise).
+- Database errors become plain messages: not found = 404, "already approved/rejected" or "nothing to undo" = 409,
+  core page too long = 422, anything else = 500 with a generic message (internal details are not shown).
+- CORS like capture-url. Deploy **normally** (JWT checked by Supabase, no `--no-verify-jwt`).
+
+**New screen: Brain → Review** (`review.js` + `review.css`).
+
+- `index.html`: one Review chip next to Map / Thoughts, an empty `<div id="panel-review">`, the stylesheet link and
+  the script tag. `shell.js`: `review: 'brain'` and one line in `load()`. Nothing else in those files changed.
+- Shows each waiting proposal: which page, the reason, the page's text **now** vs the **proposed** text, and what it is
+  based on (the `label` of each source). **Sensitive** ones get a red warning, and Approve asks "are you sure?" first.
+- Approve / Reject buttons, and **Undo last change** (asks first). All three go through review-proposal.
+- Below that, your four pages: Current shown, History folded away under "History".
+- Reading uses your own login (row-level security), so you only ever see your rows. All text is escaped
+  (a note containing `<script>` shows as text, never runs).
+
+Tests: `tests/core-memory/review.test.mjs` (9 tests, fake login + fake database): bad/missing token = 401,
+body `user_id` ignored, bad action = 400, id must be a uuid, right database function called for each action,
+error messages/status codes, CORS, and index.ts reads the user from the token. `handler.ts` checked with `tsc --strict`.
+
+UI check: I served the app on this machine with a **fake** Supabase (no network at all) in a headless browser at phone
+size: both proposals showed, the sensitive warning and confirm appeared, `<script>` in a label showed as text,
+Approve / Reject / Undo sent the right requests, and no page errors. Not tried against the real backend.
