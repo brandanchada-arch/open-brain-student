@@ -6,6 +6,9 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { pickQuizMaterial } from "../_shared/library.ts";
+import {
+  ADD_SESSION_LOG_DESCRIPTION, addSessionLog, GET_CORE_DESCRIPTION, getCoreText, MCP_INSTRUCTIONS,
+} from "../_shared/core-memory.ts";
 
 // These come from Supabase automatically — no setup needed.
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected into every
@@ -41,6 +44,25 @@ const corsHeaders = {
 // when a client calls "tools/list" — it's basically the menu of things
 // the AI is allowed to do with your brain.
 const TOOLS = [
+  // ---- Core memory (2026-11-03): listed first so clients see it first ----
+  {
+    name: "get_core",
+    description: GET_CORE_DESCRIPTION,
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "add_session_log",
+    description: ADD_SESSION_LOG_DESCRIPTION,
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "A few words naming the session" },
+        summary: { type: "string", description: "Short summary (max 2,000 characters): what was done, decisions, next steps" },
+        project: { type: "string", description: "Optional project name, e.g. open-brain" },
+      },
+      required: ["title", "summary"],
+    },
+  },
   {
     name: "search_thoughts",
     description:
@@ -352,7 +374,10 @@ Deno.serve(async (req) => {
         JSON.stringify(rpcResult(id, {
           protocolVersion: "2024-11-05",
           capabilities: { tools: {} },
-          serverInfo: { name: "open-brain-mcp", version: "1.4.0" },
+          serverInfo: { name: "open-brain-mcp", version: "1.5.0" },
+          // Clients that support it add this to Claude's context. Not all do,
+          // so get_core's description says the same thing.
+          instructions: MCP_INSTRUCTIONS,
         })),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -375,6 +400,16 @@ Deno.serve(async (req) => {
     if (method === "tools/call") {
       const toolName = params?.name;
       const args = params?.arguments ?? {};
+
+      // ---------------- Core memory tools ----------------
+      // Service role again, so both are filtered to OWNER_USER_ID.
+      if (toolName === "get_core" || toolName === "add_session_log") {
+        if (!OWNER_USER_ID) {
+          throw new Error("OWNER_USER_ID is not set in Edge Function secrets");
+        }
+        if (toolName === "get_core") return textResult(id, await getCoreText(supabase, OWNER_USER_ID));
+        return textResult(id, await addSessionLog(supabase, OWNER_USER_ID, args));
+      }
 
       if (toolName === "search_thoughts") {
         const query = String(args.query ?? "").trim();

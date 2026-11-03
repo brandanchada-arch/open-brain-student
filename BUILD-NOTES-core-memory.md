@@ -15,8 +15,8 @@ Claude Desktop reads the core page at the start of each chat through a new MCP t
 | # | Item | Status |
 |---|---|---|
 | 1 | Pages tables + versions (undo) | done, 11 SQL tests pass |
-| 2 | MCP `get_core` + `add_session_log` | in progress |
-| 3 | weekly-condenser function | not started |
+| 2 | MCP `get_core` + `add_session_log` | done, 5 tests pass |
+| 3 | weekly-condenser function | in progress |
 | 4 | Topic pages: Current replaced, History grows | not started |
 | 5 | Review screen + review-proposal function | not started |
 | 6 | Dated SQL file + commented pg_cron job | not started |
@@ -44,3 +44,20 @@ File: `supabase/sql/2026-11-03-core-memory.sql` (all schema for this build lives
 Tests: `tests/core-memory/sql.test.mjs` (PGlite). Checks seeding, running the file twice, RLS (you read only your
 own rows, nobody can write pages/proposals/logs directly from the app), approve/reject/undo, double-approve refused,
 someone else's proposal refused, core page over 4,000 characters refused, long session summaries refused.
+
+## Item 2: MCP tools (done)
+
+Changed `supabase/functions/open-brain-mcp/index.ts` (small edits) and added `supabase/functions/_shared/core-memory.ts`
+(new file; the logic lives here so it can be tested with Node).
+
+- `get_core`: returns the core page's approved "Current" text for `OWNER_USER_ID`, labelled as background facts,
+  not instructions. Empty page = a short note saying so.
+- `add_session_log(title, summary, project)`: saves to `session_logs` for `OWNER_USER_ID`. Summary max 2,000 characters
+  (checked in the function AND by the database), so transcripts can't be stored. Any user id in the arguments is ignored.
+- `initialize` now returns an `instructions` field ("call get_core at the start of every chat"). The `get_core`
+  description says the same, for clients that ignore instructions. Version bumped to 1.5.0.
+- Both tools refuse to run if `OWNER_USER_ID` is not set, like the library tools.
+
+Tests: `tests/core-memory/mcp.test.mjs` with a fake database (`tests/core-memory/fake-db.mjs`).
+Couldn't test: the real MCP server running in Deno (Deno could not be installed here; its npm installer needs to
+download a binary and that was blocked). The wiring in `index.ts` is checked by reading the source.
