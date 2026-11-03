@@ -27,6 +27,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { indexLibraryEntry, saveLibraryEntry } from "../_shared/library.ts";
+import { doorCheckViaGateway } from "../_shared/door-check.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -267,6 +268,8 @@ Deno.serve(async (req: Request) => {
     // Transcripts are reference material: they go to the Reference Library
     // (doc_type "transcript"), not the brain, and get their embedding + chunks here.
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    // Door check: flags text that tries to instruct an AI. Never blocks the save.
+    const door_check = await doorCheckViaGateway(`${title}\n${content}`, user.id, "capture-youtube");
     let saved: { id: string };
     try {
       saved = await saveLibraryEntry(admin, {
@@ -282,6 +285,7 @@ Deno.serve(async (req: Request) => {
           video_url: videoUrl,
           has_transcript: result.hasTranscript,
           fetched_via: result.source,
+          door_check,
         },
       });
     } catch (insertError) {
@@ -297,6 +301,7 @@ Deno.serve(async (req: Request) => {
       title,
       has_transcript: result.hasTranscript,
       fetched_via: result.source,
+      door_flagged: door_check.flagged,
       preview: content.slice(0, 240) + "…",
     });
   } catch (err) {

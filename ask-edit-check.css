@@ -28,3 +28,7 @@
 .et-toast { position: fixed; left: 16px; right: 16px; bottom: calc(90px + env(safe-area-inset-bottom, 0px)); z-index: 50; max-width: 480px; margin: 0 auto;
   background: #14301F; color: var(--ok, #6EE7A0); padding: 12px 16px; border-radius: 14px; font-size: 14px; font-weight: 600; text-align: center; }
 .et-toast.err { background: #331816; color: #FCA5A5; }
+
+/* ---------- Door check flag in the Library reader (door-flag.js) ---------- */
+.door-flag { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: var(--accent-soft); color: #F7CB8C; font-size: 14px; line-height: 1.45; }
+.door-flag .door-reasons { margin-top: 4px; font-size: 13px; color: var(--muted); }

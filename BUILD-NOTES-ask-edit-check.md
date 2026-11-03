@@ -12,7 +12,7 @@ tested with fakes in this cloud computer.
 | 1 | Telegram lock | done (lock already existed, kept as is, tests added) |
 | 2 | Ask mode | done (tested with fakes) |
 | 3 | Edit notes | done (SQL tested in PGlite, edge logic with fakes) |
-| 4 | Door check | not started |
+| 4 | Door check | done (tested with fakes) |
 
 ## 1. Telegram lock
 
@@ -174,6 +174,58 @@ fails, the old tags stay. These are the same repair jobs you already run.
 **Not tested:** `edit-thought/index.ts` and `enrich-thought/index.ts` themselves (they import
 supabase-js from the internet; no Deno here). The live `thoughts` table may have columns or
 policies my PGlite copy doesn't; the SQL only touches columns named in CLAUDE.md.
+
+## 4. Door check
+
+**What it does.** Whenever outside text comes into the library (a web page via `capture-url`,
+a YouTube transcript via `capture-youtube`, a PDF or pasted transcript via `save-library`), it
+is checked for wording that tries to give orders to an AI ("ignore all previous instructions",
+fake `SYSTEM:` lines, "reveal your hidden instructions", "if you are an AI reading this…",
+lots of invisible characters). The result goes on the library row as
+`metadata.door_check = { flagged, reasons, checked_at }` (the shared name, exactly).
+**The save is never blocked.** In Study → Library, opening a flagged entry shows a "Heads-up"
+box under the title with the reasons.
+
+**Cheap first.** Pattern matching runs over the whole text (no AI, no cost; under 2 seconds even
+for ~1.5 million characters in the test). Clear matches flag right away. Only when the patterns
+are *unclear* (softer hints like "from now on, respond only…" or "you are now an assistant")
+does a small sample (the text around those hints, max 3,000 characters) go to the AI through
+`call-llm`. Just naming an AI model ("this article compares ChatGPT and Claude") doesn't trigger
+an AI call. A whole transcript is never sent.
+
+**Decisions**
+- If the AI double-check fails or gives an unreadable answer, the entry is **flagged** (safer:
+  a false warning costs nothing, a missed one could matter).
+- If the door check itself crashes, it also flags (with reason "door check could not run").
+- `save-library` writes `door_check` *after* any metadata the browser sent, so a page can't
+  send a fake "not flagged" result.
+- An article *about* prompt injection will probably be flagged. That's expected and harmless.
+- The capture functions now also return `door_flagged: true/false`; the app ignores it for now.
+- Re-capturing the same URL replaces the metadata, so the check is re-done.
+- Old library rows have no `door_check` and show no box (nothing to backfill unless you want to).
+
+**Files**
+- `supabase/functions/_shared/door-check.ts` (new).
+- `capture-url`, `capture-youtube`, `save-library` (`index.ts`): a few lines each.
+- `door-flag.js` (new): watches the Library reader (no change to `library.js`) and adds the box.
+  Styles in `ask-edit-check.css`; one `<script>` line in `index.html`.
+
+**Tests** (`tests/ask-edit-check/door-check.test.mjs`): clean class notes → not flagged, no AI
+call; nine kinds of clear attempts → flagged without AI; invisible characters; naming an AI
+model → nothing; unclear text cleared by AI / flagged by AI; AI down, unreadable or throwing →
+flagged; a ~1.5-million-character transcript → fast, and the AI sample stays under 3,000
+characters; exact result shape; helpers. All pass.
+
+## UI check (headless browser)
+`tests/ask-edit-check/ui.test.mjs` loads `ask.js`, `edit-thought.js`, `door-flag.js` and
+`ask-edit-check.css` into Chromium on a small copy of the Search / Recent / Library markup with
+a **fake** `sb` client (all network blocked). It checks: Ask sends `{query, ask: true}`, shows
+the answer as plain text (HTML in an answer is not run), lists notes with the Outdated tag; cards
+get Edit buttons and Outdated badges; the editor loads the text, shows earlier versions, lets
+you tick outdated, find and pick a replacement, and sends exactly
+`{id, content, outdated, replaced_by}`; the door flag shows for a flagged entry and not for a
+clean one; no page errors. I also looked at a phone-width screenshot with the app's real styles.
+Not checked: the real `index.html` with real sign-in (needs the live Supabase).
 
 ## Changes for later (files I wasn't allowed to touch)
 - `open-brain-mcp`: `search_thoughts` there already ranks outdated notes lower (it's the SQL).
