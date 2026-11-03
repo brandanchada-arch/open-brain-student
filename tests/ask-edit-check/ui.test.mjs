@@ -133,8 +133,6 @@ test('Ask button, Edit flow and door flag work in a browser (fake backend)', { s
     await page.waitForTimeout(200);
     assert.equal(await page.locator('#libReader .door-flag').count(), 0, 'no flag on a clean entry');
 
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.screenshot({ path: process.env.UI_SHOT || '/dev/null' }).catch(() => {});
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();
