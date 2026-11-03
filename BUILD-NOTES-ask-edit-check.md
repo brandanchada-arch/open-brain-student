@@ -11,7 +11,7 @@ tested with fakes in this cloud computer.
 |---|------|--------|
 | 1 | Telegram lock | done (lock already existed, kept as is, tests added) |
 | 2 | Ask mode | done (tested with fakes) |
-| 3 | Edit notes | not started |
+| 3 | Edit notes | done (SQL tested in PGlite, edge logic with fakes) |
 | 4 | Door check | not started |
 
 ## 1. Telegram lock
@@ -95,3 +95,92 @@ does nothing. Result: all pass.
 **Not tested:** `search-brain` itself can't be loaded here (it imports supabase-js from the
 internet, and Deno couldn't be installed in this cloud computer). The Ask button was checked
 in a headless browser with a fake `sb` (see the UI check section further down, if present).
+
+## 3. Edit notes
+
+**What it does.** Every thought card in Brain → Thoughts (Recent and Search results) gets an
+**Edit** button. It opens the full text in a box, a "This note is outdated" tick box and, when
+ticked, a search to pick the newer note that replaces it. "Earlier versions" shows the text
+before each edit; tapping one puts it back in the box (you still press Save). Outdated notes
+get an "Outdated" badge.
+
+**How saving works**
+1. `edit-thought` (new edge function) takes the user from the login token.
+2. It calls `save_thought_edit` (new SQL function), which in **one transaction**: checks the
+   thought is yours and not archived, saves the old text + old tags/category/summary to
+   `thought_versions`, updates the text (the existing `trg_thoughts_set_dedup_key` trigger
+   recalculates `dedup_key`), and clears the embedding, the old 'summary' chunks and the old
+   semantic links. If the new text is exactly the same as another of your notes, the unique
+   `(dedup_key, user_id)` index refuses it, the whole thing is undone (no version row either),
+   and the app shows "Another of your notes already has exactly this text. Nothing was changed."
+3. Then it rebuilds embedding → links → chunks → tags/category/summary with the **same code
+   enrich-thought uses** (moved into `_shared/enrich.ts`). Short notes are rebuilt before the
+   app gets its answer; long ones (over 2,000 characters) in the background.
+
+**If the AI is down during an edit:** the embedding stays empty (it was cleared in step 2), so
+`backfill-embeddings` picks it up, and then `backfill-links` links it (it has no links left).
+Long notes without chunks show up in `thoughts_needing_chunks` for `backfill-chunks`; chunks
+saved without an embedding are fixed by `backfill-chunks {"fill_embeddings": true}`. If tagging
+fails, the old tags stay. These are the same repair jobs you already run.
+
+**Outdated notes** (`outdated_at`, optional `replaced_by`):
+- `search_thoughts`: same parameters and same result columns, so `create or replace` updates it
+  in place. Outdated notes get half their score, so they show up below current notes but are
+  never hidden. Ask labels them "(outdated)".
+- `find_links_for_thought`: never links to an outdated note. Edited outdated notes aren't linked either.
+- `daily-quiz` and `gap-questions`: skip outdated notes.
+- Never deleted. Un-ticking the box makes a note current again.
+- A replacement must be another of your own, non-archived notes, not the note itself, and not a
+  note that already points back to this one (no loops).
+
+**Files**
+- `supabase/sql/2026-11-03-ask-edit-check.sql` (new): columns, `thought_versions`
+  (RLS on, owner can read, nobody can write from the browser), `save_thought_edit` (service role
+  only; old versions dropped first), `search_thoughts`, `find_links_for_thought`.
+- `supabase/functions/edit-thought/index.ts` (new).
+- `supabase/functions/_shared/enrich.ts` (new, code moved from enrich-thought unchanged),
+  `supabase/functions/_shared/thought-edit.ts` (new, the rebuild).
+- `supabase/functions/enrich-thought/index.ts`: now imports from `_shared/enrich.ts`. Same
+  behaviour; only one log line's wording changed.
+- `supabase/functions/daily-quiz/index.ts`, `gap-questions/index.ts`: one line each (`outdated_at is null`).
+- `edit-thought.js` (new) and styles in `ask-edit-check.css`; one `<script>` line in `index.html`.
+  It hooks into the existing `renderThoughtCards` / `renderSearchResults` the same way
+  `shell.js` wraps loaders, so `index.html`'s own code is unchanged.
+
+**Decisions**
+- Old links are removed in *both* directions when the text changes (they described the old
+  text). Marking a note outdated does *not* remove its existing links; it just gets no new ones.
+- `thought_versions` has no delete policy and no cascade, so history is never lost by accident.
+- Edits are capped at 200,000 characters.
+- I did **not** change `backfill-links`, `weekly-digest` or `open-brain-mcp` (the last two were
+  off-limits). See "Changes for later" below.
+
+**Tests**
+- `tests/ask-edit-check/sql.test.mjs` runs the *real* 2026-10-22 and 2026-11-03 SQL files in
+  PGlite (an in-memory Postgres with pgvector), with a fake `auth.uid()`, an `authenticated`
+  role and the course's dedup trigger. Checks: file runs twice; works if the other session
+  added the columns first; no extra overloads; edit saves the old version, recalculates
+  dedup_key, clears embedding/summary chunks/links but keeps 'source' chunks; duplicate text is
+  refused and fully rolled back; same text as *another user's* note is fine; can't edit someone
+  else's or an archived thought; outdated + replacement + undo; bad replacements and loops
+  refused; owner can read versions, others can't, the browser can't write them or call
+  `save_thought_edit`; outdated notes rank lower in `search_thoughts` but are still found;
+  `find_links_for_thought` skips them. All pass.
+- `tests/ask-edit-check/edit.test.mjs`: the rebuild with a fake database and fake AI:
+  embedding + links + tags; outdated note not linked; embedding failure leaves it for the
+  backfill; long note re-chunked; digests keep tags; bad AI reply keeps old tags;
+  `parseEnrichment` unchanged. All pass.
+
+**Not tested:** `edit-thought/index.ts` and `enrich-thought/index.ts` themselves (they import
+supabase-js from the internet; no Deno here). The live `thoughts` table may have columns or
+policies my PGlite copy doesn't; the SQL only touches columns named in CLAUDE.md.
+
+## Changes for later (files I wasn't allowed to touch)
+- `open-brain-mcp`: `search_thoughts` there already ranks outdated notes lower (it's the SQL).
+  Its `list_recent` could show "(outdated)" and its `search_library` path could show the door
+  check flag. Optional.
+- `weekly-digest`: add `.is("outdated_at", null)` to its thoughts query if you don't want
+  outdated notes in the Sunday summary.
+- `backfill-links`: optional `.is("outdated_at", null)` so it doesn't give an outdated note
+  new outgoing links.
+- `sw.js`: add the new app files to the `SHELL` list (see go-live steps).
