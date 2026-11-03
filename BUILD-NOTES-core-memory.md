@@ -19,7 +19,7 @@ Claude Desktop reads the core page at the start of each chat through a new MCP t
 | 3 | weekly-condenser function | done, 10 tests pass |
 | 4 | Topic pages: Current replaced, History grows | done, 2 SQL tests |
 | 5 | Review screen + review-proposal function | done, 9 tests pass + UI checked with a fake backend |
-| 6 | Dated SQL file + commented pg_cron job | not started |
+| 6 | Dated SQL file + commented pg_cron job | done (commented out), 36 tests pass |
 
 ## Setup note
 
@@ -137,3 +137,59 @@ error messages/status codes, CORS, and index.ts reads the user from the token. `
 UI check: I served the app on this machine with a **fake** Supabase (no network at all) in a headless browser at phone
 size: both proposals showed, the sensitive warning and confirm appeared, `<script>` in a label showed as text,
 Approve / Reject / Undo sent the right requests, and no page errors. Not tried against the real backend.
+
+## Item 6: weekly schedule (done, switched off)
+
+At the end of `supabase/sql/2026-11-03-core-memory.sql` there is a **commented-out** block (section 8) that, once
+switched on, makes pg_cron call weekly-condenser every Sunday at 16:00 UTC (`'0 16 * * 0'`, job name
+`weekly-brain-condenser`). The key it sends is read from Vault, never written in the file. Two placeholders must be
+replaced before use: `<project-ref>` and `<VAULT_SECRET_NAME_PLACEHOLDER>`.
+It is commented out because running it before weekly-condenser is deployed would just fail every Sunday.
+The SQL tests were re-run after the change: all pass (the commented block is ignored by the database).
+Not tested: the cron block itself (PGlite has no pg_cron / pg_net / Vault).
+
+## Final summary
+
+**Built:** brain pages with saved versions and undo (SQL), MCP `get_core` + `add_session_log`, the weekly-condenser
+function, topic pages whose History only grows, the review-proposal function, the Brain → Review screen, and a
+ready-to-switch-on Sunday schedule.
+
+**Tests:** `npm i --no-save @electric-sql/pglite jsonrepair` then `node --test "tests/core-memory/*.test.mjs"`:
+**36 tests, 36 pass, 0 fail** (SQL in PGlite incl. RLS, MCP tools, condenser, review-proposal).
+
+**Not tested:**
+- Nothing ran in Deno (it could not be installed here), so the `index.ts` files (the "doors") were checked by reading
+  them and by tsc on the handlers, not by running them.
+- Nothing ran against the live database or real Supabase login (no live access, on purpose).
+- pg_cron / pg_net / Vault (the schedule block).
+- The Review screen was only run with a fake Supabase in a headless browser, not with the real backend or on a phone.
+
+**Decisions (safer option each time):**
+- review-proposal keeps normal JWT checking AND checks the user itself; it never reads a user id from the body.
+- Database error details are not shown in the app except the friendly ones (not found / already done / nothing to
+  undo / too long).
+- Sensitive proposals need a second "are you sure?"; Undo also asks first.
+- The schedule ships switched off, with obvious placeholders.
+- `sw.js` was not changed (another session owns it); see go-live step 6.
+
+## Go-live steps (in this order)
+
+1. **Database:** from this folder run
+   `npx supabase db query --linked -f supabase/sql/2026-11-03-core-memory.sql`
+   (safe to run again; it never deletes rows).
+2. **Secrets:** `OWNER_USER_ID` already exists in Edge Function secrets, nothing to add there.
+   Put the service role key in **Vault** under a name you choose (Dashboard → Project Settings → Vault).
+3. **Deploy** (from this folder):
+   - `npx supabase functions deploy weekly-condenser --project-ref zqbjxbdborfahsomluye`
+   - `npx supabase functions deploy review-proposal --project-ref zqbjxbdborfahsomluye` (normal, no `--no-verify-jwt`)
+   - `npx supabase functions deploy open-brain-mcp --project-ref zqbjxbdborfahsomluye --no-verify-jwt`
+     (it imports the new `_shared/core-memory.ts`)
+4. **Try it once by hand:** call weekly-condenser with the service role key, then open Brain → Review in the app.
+5. **Schedule:** in the SQL file, section 8, replace `<project-ref>` and `<VAULT_SECRET_NAME_PLACEHOLDER>`, remove the
+   `-- ` in front of the `select cron.schedule(...)` lines, and run just that block in the SQL Editor.
+   Check with `select * from cron.job;` that it runs after weekly-digest.
+6. **Phone app cache (sw.js, owned by another session):** add `'review.js', 'review.css'` to the `SHELL` list and bump
+   `VERSION` (for example `'ob-2026-11-03-review1'`), so installed phones pick up the new screen and it works offline.
+7. Merge the branch into `master` only when all of the above works (master redeploys the live site).
+
+Branch: **`cloud/core-memory`**.

@@ -235,3 +235,32 @@ revoke execute on function public.undo_brain_page_change(uuid) from public, anon
 grant execute on function public.approve_brain_proposal(uuid, uuid) to service_role;
 grant execute on function public.reject_brain_proposal(uuid, uuid) to service_role;
 grant execute on function public.undo_brain_page_change(uuid) to service_role;
+
+-- ---------- 8. Weekly schedule (COMMENTED OUT: turn on after deploying weekly-condenser) ----------
+-- Every Sunday at 16:00 UTC pg_cron asks weekly-condenser to write new proposals.
+-- It should run AFTER weekly-digest: check the digest's time with  select * from cron.job; Before un-commenting:
+--   1. Deploy weekly-condenser.
+--   2. Put the service role key in Vault (Dashboard → Project Settings → Vault, or
+--      select vault.create_secret('<the key>', '<a name>');) and write that name below
+--      instead of <VAULT_SECRET_NAME_PLACEHOLDER>.
+--   3. Replace <project-ref> with your project ref.
+-- Running cron.schedule again with the same job name replaces the old job (no duplicates).
+--
+-- select cron.schedule(
+--   'weekly-brain-condenser',
+--   '0 16 * * 0',
+--   $cron$
+--   select net.http_post(
+--     url     := 'https://<project-ref>.supabase.co/functions/v1/weekly-condenser',
+--     headers := jsonb_build_object(
+--       'Content-Type', 'application/json',
+--       'Authorization', 'Bearer ' || (
+--         select decrypted_secret from vault.decrypted_secrets
+--          where name = '<VAULT_SECRET_NAME_PLACEHOLDER>'
+--       )
+--     ),
+--     body    := '{}'::jsonb,
+--     timeout_milliseconds := 150000
+--   );
+--   $cron$
+-- );
