@@ -236,3 +236,82 @@ Not checked: the real `index.html` with real sign-in (needs the live Supabase).
 - `backfill-links`: optional `.is("outdated_at", null)` so it doesn't give an outdated note
   new outgoing links.
 - `sw.js`: add the new app files to the `SHELL` list (see go-live steps).
+
+## How to run the tests
+On the PC, from this folder (needs Node 22.18 or newer, which can run `.ts` files directly):
+```
+npm i --no-save @electric-sql/pglite@0.5.12 @electric-sql/pglite-pgvector@0.0.13
+node --test "tests/ask-edit-check/*.test.mjs"
+```
+`--no-save` keeps `package.json` unchanged. The UI test needs Playwright + Chromium and skips
+itself if they aren't installed. Last result in the cloud: **53 tests, 53 pass, 0 fail.**
+
+Tools I couldn't use here: **Deno** (installing it was blocked in this cloud computer), so the
+edge functions were tested by loading their `.ts` files in Node with a fake `Deno` and fake
+`fetch`, and the three entry files that import supabase-js from the internet
+(`search-brain`, `edit-thought`, `enrich-thought`) weren't loaded at all. PGlite used the
+week-old versions above (the newest were published today, so I avoided them).
+
+## Go-live steps (in this order)
+Run everything from the `open-brain-student` folder on the PC, after this branch is merged
+(with the other sessions' branches) on your PC. **Don't push to master until step 5**: master
+deploys the app, and the new buttons need the new functions to be live first.
+
+1. **SQL** (adds things only):
+   ```
+   npx supabase db query --linked -f supabase/sql/2026-11-03-ask-edit-check.sql
+   ```
+   Safe in any order with the `cloud/core-memory` SQL (both use `add column if not exists`
+   for `outdated_at` / `replaced_by`). Must run **before** step 3's `daily-quiz` and
+   `gap-questions`, which filter on `outdated_at`. If the core-memory SQL also replaces
+   `search_thoughts` or `find_links_for_thought`, whichever runs **last** wins: compare the two
+   and keep both changes (mine: the `outdated_at` half-score in `search_thoughts`, and
+   `t.outdated_at is null` in `find_links_for_thought`).
+2. **Secrets.** No new ones for Ask, Edit or Door check. The Telegram lock needs
+   `TELEGRAM_WEBHOOK_SECRET` and `TELEGRAM_OWNER_ID`. Check with
+   `npx supabase secrets list --project-ref zqbjxbdborfahsomluye`. If either is missing, set it
+   now (`npx supabase secrets set NAME=value --project-ref zqbjxbdborfahsomluye`) and follow the
+   lock steps in section 1 when you deploy `telegram-bot` below.
+3. **Deploy functions** (each: `npx supabase functions deploy <name> --project-ref zqbjxbdborfahsomluye`):
+   | Function | Flags | Why |
+   |---|---|---|
+   | `edit-thought` | *(none — keep JWT check on; the app sends your login)* | new |
+   | `search-brain` | same as before | imports `_shared/ask.ts` |
+   | `telegram-bot` | `--no-verify-jwt` | `/ask`, imports `_shared/ask.ts` |
+   | `capture-url` | same as before | door check |
+   | `capture-youtube` | same as before | door check |
+   | `save-library` | same as before | door check |
+   | `daily-quiz` | `--no-verify-jwt` | skips outdated notes (after step 1!) |
+   | `gap-questions` | `--no-verify-jwt` | skips outdated notes (after step 1!) |
+   | `enrich-thought` | same as before | now imports `_shared/enrich.ts` (same behaviour) |
+
+   I only *added* files to `_shared/` (`ask.ts`, `enrich.ts`, `thought-edit.ts`,
+   `door-check.ts`); `library.ts`, `thought-chunks.ts` and `chunking.ts` are unchanged, so
+   `backfill-chunks`, `weekly-digest` and `open-brain-mcp` don't need a redeploy for this branch.
+   `enrich-thought` can wait if you'd rather not touch the webhook today: the old deployed copy
+   keeps working on its own.
+4. **Quick checks before the app update:** send the bot `/ask what did I do last week?` —
+   you should get a short answer with "Notes used". Then `/recent` still works.
+5. **sw.js + app.** In `sw.js`, add these to the `SHELL` list and change `VERSION` (e.g.
+   `'ob-2026-11-03-ask1'`) so phones pick up the new files:
+   `'ask.js', 'edit-thought.js', 'door-flag.js', 'ask-edit-check.css'`.
+   Then push to master (Vercel deploys).
+6. **Try it in the app:** Brain → Thoughts → type a question → **Ask**. Tap **Edit** on a test
+   thought, change a word, Save, then search for the new word. Capture a test web page and
+   open it in Study → Library (no warning expected on a normal page).
+
+## Suggested updates for CLAUDE.md / DECISIONS.md (I wasn't allowed to edit them)
+- Edge functions table: `edit-thought` — edit a thought / mark outdated; user from login token;
+  old text to `thought_versions`; rebuilds via `_shared/enrich.ts` + `_shared/thought-edit.ts`.
+  `search-brain` — `{ask: true}` = Ask mode (`_shared/ask.ts`). `telegram-bot` — `/ask`.
+  `_shared/door-check.ts` — door check used by capture-url, capture-youtube, save-library.
+- "Anything importing `_shared/`" list: add `search-brain`, `telegram-bot`, `edit-thought`,
+  `enrich-thought`.
+- Database: `thoughts.outdated_at`, `thoughts.replaced_by`; `thought_versions` (RLS on, owner
+  read only); `save_thought_edit(...)` (service role only); outdated notes rank lower in
+  `search_thoughts` and are skipped by `find_links_for_thought`, quiz and gaps.
+- Library: `metadata.door_check = {flagged, reasons, checked_at}`.
+- DECISIONS lines: Telegram lock kept as found (401 only for wrong secret); Ask cites [T1]/[L1]
+  and lists all sources if none cited; edits clear embedding/chunks/links in the same transaction
+  so the backfills repair failures; outdated = half score, never hidden or deleted; door check
+  flags when the AI check fails; door check never blocks.
