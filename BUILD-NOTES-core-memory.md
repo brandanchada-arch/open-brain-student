@@ -17,8 +17,8 @@ Claude Desktop reads the core page at the start of each chat through a new MCP t
 | 1 | Pages tables + versions (undo) | done, 11 SQL tests pass |
 | 2 | MCP `get_core` + `add_session_log` | done, 5 tests pass |
 | 3 | weekly-condenser function | done, 10 tests pass |
-| 4 | Topic pages: Current replaced, History grows | in progress |
-| 5 | Review screen + review-proposal function | not started |
+| 4 | Topic pages: Current replaced, History grows | done, 2 SQL tests |
+| 5 | Review screen + review-proposal function | in progress |
 | 6 | Dated SQL file + commented pg_cron job | not started |
 
 ## Setup note
@@ -92,3 +92,14 @@ Tests: `tests/core-memory/condenser.test.mjs` (fake database + fake AI): right n
 (old, archived, outdated, someone else's, flagged), filters sent to the database, nothing-new = no AI call,
 works with one note, first-run summaries, pending pages skipped, bad JSON writes nothing, JSON repair (fences,
 trailing comma, cut off), proposal checks, sensitive detection. TypeScript checked with `tsc --strict`.
+
+## Item 4: topic pages (done)
+
+- On **Approve**, the page's "Current" is replaced by the proposed text, and the old "Current" goes on top of
+  "History" under a heading like `### Until 2026-11-08`. Same for the core page (`get_core` only sends "Current").
+- **History only grows** is enforced by the database: a trigger (`brain_pages_history_guard`) refuses any update that
+  doesn't keep the old History at the end of the new one, even from the service role. The only exception is
+  **Undo**, which switches the guard off for its own transaction and puts the page back exactly as it was.
+- The condenser always proposes the FULL new "Current" text (keeping what is still true), never a fragment.
+
+Tests: in `sql.test.mjs`: "approve replaces Current…" and "topic page History can never shrink…".

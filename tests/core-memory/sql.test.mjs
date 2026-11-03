@@ -156,6 +156,32 @@ test('undo puts back the last change, one step at a time, and only for this user
   assert.equal(page.current_text, before.current_text);
 });
 
+test('topic page History can never shrink by a direct update (even as service role), only by undo', async () => {
+  const a = await addProposal(ME, 'courses', 'Week 1 notes');
+  await db.query(`select approve_brain_proposal($1, $2)`, [ME, a]);
+  const b = await addProposal(ME, 'courses', 'Week 2 notes');
+  await db.query(`select approve_brain_proposal($1, $2)`, [ME, b]);
+  const page = await one(`select history_text from brain_pages where user_id = $1 and slug = 'courses'`, [ME]);
+  assert.ok(page.history_text.length > 0);
+  await assert.rejects(
+    db.query(`update brain_pages set history_text = '' where user_id = $1 and slug = 'courses'`, [ME]),
+    /can only grow/,
+  );
+  await assert.rejects(
+    db.query(`update brain_pages set history_text = 'rewritten' where user_id = $1 and slug = 'courses'`, [ME]),
+    /can only grow/,
+  );
+  // Adding on top is fine; changing Current alone is fine.
+  await db.query(`update brain_pages set history_text = 'newer entry' || E'\\n\\n' || history_text where user_id = $1 and slug = 'courses'`, [ME]);
+  await db.query(`update brain_pages set current_text = 'edited' where user_id = $1 and slug = 'courses'`, [ME]);
+  // Undo still works (it is allowed to put the older history back), and the switch is off again afterwards.
+  await db.query(`select undo_brain_page_change($1)`, [ME]);
+  await assert.rejects(
+    db.query(`update brain_pages set history_text = '' where user_id = $1 and slug = 'courses'`, [ME]),
+    /can only grow/,
+  );
+});
+
 test('session_logs refuses long summaries (no transcripts)', async () => {
   await db.query(`insert into session_logs (user_id, title, summary) values ($1, 'ok', 'short')`, [ME]);
   await assert.rejects(db.query(`insert into session_logs (user_id, title, summary) values ($1, 't', $2)`, [ME, 'x'.repeat(2001)]));

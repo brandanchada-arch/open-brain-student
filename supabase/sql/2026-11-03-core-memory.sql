@@ -27,6 +27,24 @@ drop policy if exists brain_pages_owner_select on public.brain_pages;
 create policy brain_pages_owner_select on public.brain_pages
   for select to authenticated using (auth.uid() = user_id);
 
+-- "History" only grows: any update must keep the old history_text as the END of the
+-- new one (new entries go on top). Only undo may put an older history back; it
+-- turns on brain.allow_history_rewrite for its own transaction.
+create or replace function public.brain_pages_history_guard()
+returns trigger
+language plpgsql
+as $$
+begin
+  if coalesce(current_setting('brain.allow_history_rewrite', true), '') <> 'on'
+     and right(new.history_text, char_length(old.history_text)) is distinct from old.history_text then
+    raise exception 'History on a brain page can only grow (use undo to go back)';
+  end if;
+  return new;
+end $$;
+drop trigger if exists brain_pages_history_guard on public.brain_pages;
+create trigger brain_pages_history_guard before update on public.brain_pages
+  for each row execute function public.brain_pages_history_guard();
+
 -- ---------- 2. brain_page_versions ----------
 -- One row per approved change: the page text BEFORE the change. Undo puts it back.
 create table if not exists public.brain_page_versions (
@@ -195,10 +213,12 @@ begin
    for update;
   if not found then raise exception 'Nothing to undo'; end if;
 
+  perform set_config('brain.allow_history_rewrite', 'on', true); -- this transaction only
   update public.brain_pages
      set current_text = v.current_text, history_text = v.history_text, updated_at = now()
    where id = v.page_id and user_id = p_user_id
   returning brain_pages.slug into slug;
+  perform set_config('brain.allow_history_rewrite', 'off', true);
   update public.brain_page_versions set undone_at = now() where id = v.id;
   if v.proposal_id is not null then
     update public.brain_proposals set status = 'rejected', reviewed_at = now()
