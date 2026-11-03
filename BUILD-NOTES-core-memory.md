@@ -14,8 +14,8 @@ Claude Desktop reads the core page at the start of each chat through a new MCP t
 
 | # | Item | Status |
 |---|---|---|
-| 1 | Pages tables + versions (undo) | in progress |
-| 2 | MCP `get_core` + `add_session_log` | not started |
+| 1 | Pages tables + versions (undo) | done, 11 SQL tests pass |
+| 2 | MCP `get_core` + `add_session_log` | in progress |
 | 3 | weekly-condenser function | not started |
 | 4 | Topic pages: Current replaced, History grows | not started |
 | 5 | Review screen + review-proposal function | not started |
@@ -26,3 +26,21 @@ Claude Desktop reads the core page at the start of each chat through a new MCP t
 - I built this in a separate folder (`C:\Users\josep\open-brain-core-memory`, a "git worktree":
   a second checkout of the same repo) because other sessions were using the main folder at the same time.
   Branch: `cloud/core-memory`, made from `origin/reference-library`.
+
+## Item 1: pages (done)
+
+File: `supabase/sql/2026-11-03-core-memory.sql` (all schema for this build lives in this one file).
+
+- `brain_pages`: one row per page per user. Slugs `core`, `job-search`, `courses`, `mega`.
+  `current_text` = what's true now; `history_text` = older versions, newest first.
+  The file seeds an empty row of each for every signed-up user (no user ids written in the repo).
+- `brain_page_versions`: before any approved change, the page's old text is saved here.
+  **Undo** copies the most recent one back. You can undo several times in a row.
+- `brain_proposals`, `session_logs`, and `thoughts.outdated_at` / `thoughts.replaced_by` are in the same file.
+- Three database functions do the changes, each in one transaction:
+  `approve_brain_proposal(user, proposal)`, `reject_brain_proposal(user, proposal)`, `undo_brain_page_change(user)`.
+  Only the service role (edge functions) may call them.
+
+Tests: `tests/core-memory/sql.test.mjs` (PGlite). Checks seeding, running the file twice, RLS (you read only your
+own rows, nobody can write pages/proposals/logs directly from the app), approve/reject/undo, double-approve refused,
+someone else's proposal refused, core page over 4,000 characters refused, long session summaries refused.
