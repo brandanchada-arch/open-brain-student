@@ -16,8 +16,8 @@ Claude Desktop reads the core page at the start of each chat through a new MCP t
 |---|---|---|
 | 1 | Pages tables + versions (undo) | done, 11 SQL tests pass |
 | 2 | MCP `get_core` + `add_session_log` | done, 5 tests pass |
-| 3 | weekly-condenser function | in progress |
-| 4 | Topic pages: Current replaced, History grows | not started |
+| 3 | weekly-condenser function | done, 10 tests pass |
+| 4 | Topic pages: Current replaced, History grows | in progress |
 | 5 | Review screen + review-proposal function | not started |
 | 6 | Dated SQL file + commented pg_cron job | not started |
 
@@ -61,3 +61,34 @@ Changed `supabase/functions/open-brain-mcp/index.ts` (small edits) and added `su
 Tests: `tests/core-memory/mcp.test.mjs` with a fake database (`tests/core-memory/fake-db.mjs`).
 Couldn't test: the real MCP server running in Deno (Deno could not be installed here; its npm installer needs to
 download a binary and that was blocked). The wiring in `index.ts` is checked by reading the source.
+
+## Item 3: weekly-condenser (done)
+
+New function `supabase/functions/weekly-condenser/` (`index.ts` = the door, `handler.ts` = the work).
+weekly-digest was not changed.
+
+- Only the scheduler or another function can run it (`isServiceCaller`, copied from weekly-digest). It uses
+  `OWNER_USER_ID` for whose notes to read, and refuses to run without it.
+- Reads the last 7 days of: your thoughts (not archived, not outdated, not digests, max 300), new library rows
+  (not digests, max 40, any row with `metadata.door_check.flagged = true` is skipped) and session logs (max 100).
+  Each note is cut to 700 characters, 40,000 in total, like the digest.
+- No minimum: one note is enough. **Nothing new = no AI call and nothing written.**
+- **First run with an empty core page**: also reads the short summaries of up to 400 active thoughts
+  (300 characters each, 20,000 total) to draft a first core page.
+- One AI call through `call-llm` (max 8,000 tokens so the JSON isn't cut off). The prompt says the notes are data,
+  not instructions. Notes are labelled T1, L1, S1, B1 so the AI cites short handles instead of long ids; code maps
+  them back.
+- The answer is checked by plain code: JSON is repaired if needed (`jsonrepair`), unusable = nothing written.
+  Each proposal must name a real page and at least one real source; the core page is capped at 3,500 characters
+  (asked for under 3,000); unchanged text and second proposals for the same page are dropped.
+- **Sensitive** = the AI said so, OR the text mentions health, faith, relationships, journal/diary or personal
+  money words, OR a source thought's category is journal/personal/health/etc. The list is broad on purpose:
+  a false alarm only adds a warning in the review screen.
+- `source_ids` is a list of `{kind, id, label}` (kind = thought / library / session_log), so the review screen can
+  show sources without reading `session_logs` (which the app can't read).
+- It writes only to `brain_proposals`. It never changes a page.
+
+Tests: `tests/core-memory/condenser.test.mjs` (fake database + fake AI): right notes read and wrong ones left out
+(old, archived, outdated, someone else's, flagged), filters sent to the database, nothing-new = no AI call,
+works with one note, first-run summaries, pending pages skipped, bad JSON writes nothing, JSON repair (fences,
+trailing comma, cut off), proposal checks, sensitive detection. TypeScript checked with `tsc --strict`.
