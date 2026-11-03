@@ -24,7 +24,7 @@ explain changes in plain language.
 | `search-brain` | The app's Search tab. Identifies the caller from their login token. `{library: true, course, doc_type, topic}` searches the library instead |
 | `capture-url`, `capture-youtube` | Save an article / YouTube transcript to the **library** (doc_type `article` / `transcript`), with embedding + chunks |
 | `save-library` | The app's PDF upload and pasted transcripts → library (embedding + chunks in the background) |
-| `telegram-bot` | Capture from Telegram, stamped with `OWNER_USER_ID` |
+| `telegram-bot` | Capture from Telegram, stamped with `OWNER_USER_ID`. Locked: needs Telegram's `TELEGRAM_WEBHOOK_SECRET` header and a sender matching `TELEGRAM_OWNER_ID`. Deploy with `--no-verify-jwt`. After changing the secret, POST `{"setup": true}` with that header to re-register the webhook |
 | `weekly-digest` | Sunday summary via pg_cron of non-archived thoughts, saved to the **library** (doc_type `digest`) |
 | `daily-quiz`, `gap-questions` | Study tab Quiz / Gaps (also Telegram via the scheduler). `daily-quiz` takes `{course, topic}` for the Library tab's "Quiz me". Deploy with `--no-verify-jwt` |
 | `backfill-embeddings`, `backfill-links`, `backfill-chunks` | One-time catch-up jobs, run in a PowerShell loop until `remaining` is 0. `backfill-chunks {"library": true}` repairs library embeddings/chunks |

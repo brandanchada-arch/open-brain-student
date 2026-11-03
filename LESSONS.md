@@ -5,3 +5,6 @@
 - **Querying `information_schema.triggers` prints the Database Webhook's service key** (it is written into the trigger). Don't select `action_statement` for webhook triggers. (2026-10-22)
 - **A RESTRICTIVE RLS policy** (`as restrictive for select ... using (archived_at is null)`) hides rows from the live web app instantly, without redeploying it. The service role still sees everything. (2026-10-22)
 - **Many files here have Windows (CRLF) line endings**, so string-matching edits with `\n` in a script fail silently and can wreck the file. Use the editor tool. (2026-10-22)
+
+- A function deployed with --no-verify-jwt is open to the whole internet: it must check the caller itself. telegram-bot ran for weeks with no check. (2026-11-03)
+- In a script that deploys then tests, stop at the first failure. A failed deploy meant the test ran against the old, unlocked bot. (2026-11-03)

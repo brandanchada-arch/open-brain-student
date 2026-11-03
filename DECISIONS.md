@@ -22,3 +22,7 @@ One line each: date, decision, why.
 - 2026-10-22: Capture buttons for Link / YouTube / PDF now say "Save to Library". Typed/spoken thoughts still go to the brain.
 - 2026-10-22: Deployed `open-brain-mcp` from the repo, which only accepts the key in the `Authorization` header. The previously deployed version also accepted `?key=` in the URL; the repo had already removed that (and Brandan's note says all clients send the header). Verified the connected client still works after deploy.
 - 2026-10-22: Known edge case: re-saving text identical to an archived thought (same dedup_key) hits the archived row. From the web app the RLS check refuses it; via MCP/Telegram it silently updates the archived row. Left as is (rare); fix later if it ever matters.
+
+## Telegram lock (2026-11-03)
+
+- 2026-11-03: telegram-bot had no sender or webhook check, so anyone reaching it could read and add thoughts. It now requires TELEGRAM_WEBHOOK_SECRET and a sender matching TELEGRAM_OWNER_ID, and refuses everything if either is missing. Wrong secret gets 401 (Telegram retries, nothing lost); wrong sender gets a silent 200. TELEGRAM_OWNER_ID was copied from Brain Calendar's planner_chat_id.

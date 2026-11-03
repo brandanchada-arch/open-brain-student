@@ -4,6 +4,10 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const OWNER_USER_ID = Deno.env.get("OWNER_USER_ID")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+// Only Telegram knows this secret (it sends it in a header), and only this one
+// Telegram account may use the bot. If either is missing, the bot refuses everything.
+const TELEGRAM_WEBHOOK_SECRET = Deno.env.get("TELEGRAM_WEBHOOK_SECRET") ?? "";
+const TELEGRAM_OWNER_ID = Deno.env.get("TELEGRAM_OWNER_ID") ?? "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,9 +41,45 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Not from Telegram (or not set up yet). A non-200 makes Telegram hold the message
+  // and try again, so nothing is lost while the webhook is being registered.
+  const givenSecret = req.headers.get("X-Telegram-Bot-Api-Secret-Token") ?? "";
+  if (!TELEGRAM_WEBHOOK_SECRET || !TELEGRAM_OWNER_ID || givenSecret !== TELEGRAM_WEBHOOK_SECRET) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
+  }
+
   try {
     const body = await req.json();
+
+    // Tells Telegram to send the secret with every message. Run once after changing the secret.
+    if (body?.setup === true) {
+      const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: `${SUPABASE_URL}/functions/v1/telegram-bot`,
+          secret_token: TELEGRAM_WEBHOOK_SECRET,
+        }),
+      });
+      const result = await res.json().catch(() => ({}));
+      return new Response(JSON.stringify({ ok: result.ok === true, description: result.description }), {
+        status: res.ok ? 200 : 502,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
     const message = body?.message;
+
+    // Anyone else who finds the bot gets no reply. Still a 200, so Telegram doesn't retry.
+    if (message && String(message.from?.id ?? "") !== TELEGRAM_OWNER_ID) {
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
 
     if (!message || !message.text) {
       // Nothing to do, but Telegram still needs a 200 or it will keep retrying
