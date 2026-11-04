@@ -38,3 +38,29 @@ Decisions made while drafting, with nobody available to ask. Each picks the safe
   follow-up worth doing (filter through the owner's library ids).
 - Missing `MCP_ACCESS_KEY` or `OWNER_USER_ID` secret → refuse (500), never "open by default".
   Key compared in constant time.
+
+## Shared PC helpers (items 4–6)
+- `scripts/lib/config.js` reads `%USERPROFILE%\.open-brain\.env` as plain KEY=VALUE text (never executed,
+  BOM tolerated). Placeholder values starting with `<` count as missing.
+- `scripts/lib/brain-api.js` is the ONE place that calls the internet: `callTool()` (JSON-RPC
+  `tools/call` to open-brain-mcp, wrappers `getCore()` / `addSessionLog()`) and `callExport()`.
+- The key is only ever sent over https, or plain http to 127.0.0.1/localhost (tests). Any other
+  http URL is treated as "settings missing".
+- One base URL (`OPEN_BRAIN_FUNCTIONS_URL`) instead of separate URLs per function.
+
+## Weekly export (item 4)
+- Downloads everything first, then writes. The week is marked done (`.last-export.json`) only at the
+  very end, so a failed run is simply retried by the next trigger.
+- File names: `<full uuid>-<slug of first 40 chars>.md`, ASCII only. An existing file for an id keeps
+  its name even if the title changes (no duplicates). Files are rewritten only when the text changed.
+  **Edits made in the export folder are overwritten next week** — README says to treat it as a
+  read-only mirror (copy notes elsewhere to edit them).
+- Front matter: every string double-quoted (JSON escaping is valid YAML). Thoughts get `tags`,
+  `category` (or metadata `type`), `summary` only if present in metadata; the full metadata is in the
+  JSON backup.
+- Refuses: OneDrive (env vars `OneDrive*` and any path part starting with "OneDrive"), also Dropbox /
+  Google Drive / iCloud Drive folder names (extra safety, not asked for), any folder with a `.git`
+  in it or above it, and the bare home folder. Junctions are followed for the existing part of the path.
+- Backups are never overwritten: a second backup on the same day gets a time suffix.
+- Schedule: Task Scheduler trigger repeats every 4 hours; the script exits in under a second once
+  this week is done. Console window may flash briefly each time (see README for the hidden option).

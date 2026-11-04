@@ -4,7 +4,7 @@ Files for Brandan's Windows PC, drafted in a cloud session **without any live ac
 Nothing here has been installed or run on Windows yet. A later session on the PC reviews
 and installs them, following the steps below in order.
 
-Status: items 1–3 (skills, voice skill, export-brain function) drafted. More items are added as they are finished.
+Status: items 1–4 (skills, voice skill, export-brain function, weekly export) drafted. More items are added as they are finished.
 
 ## 1. Skills: exam-prep, job-application, case-study
 
@@ -68,3 +68,74 @@ No new secrets are needed: it uses `MCP_ACCESS_KEY` and `OWNER_USER_ID`, which a
 
 **Undo:** Supabase dashboard → Edge Functions → export-brain → Delete (or `npx supabase functions delete export-brain --project-ref <your-project-ref>`).
 Nothing else depends on it except the weekly export.
+
+## Before items 4–6: your settings file (once)
+
+The PC scripts read `%USERPROFILE%\.open-brain\.env` — outside every repo, so the key is never committed.
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.open-brain" | Out-Null
+if (-not (Test-Path "$env:USERPROFILE\.open-brain\.env")) { Copy-Item pc-setup\env.example "$env:USERPROFILE\.open-brain\.env" }
+code "$env:USERPROFILE\.open-brain\.env"
+```
+Replace `<your-project-ref>` and `<paste-your-mcp-access-key-here>` with the real values (the same
+`MCP_ACCESS_KEY` as in Supabase → Edge Functions → Secrets). Save.
+
+Also copy the scripts to a fixed place so the hooks and scheduled task don't depend on where this
+repo is:
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.open-brain\scripts" | Out-Null
+Copy-Item -Recurse -Force pc-setup\scripts\* "$env:USERPROFILE\.open-brain\scripts\"
+```
+(Re-run that `Copy-Item` line after pulling script updates.)
+
+**Undo:** delete `%USERPROFILE%\.open-brain` (this removes your key from the PC too).
+
+## 4. Weekly export to your PC
+
+**What:** once a week, saves your brain to `%USERPROFILE%\open-brain-export`:
+- `thoughts\` and `library\`: one markdown file per non-archived thought and library entry, with
+  front matter (tags, course, dates) that Obsidian understands. You can open the folder as an
+  Obsidian vault.
+- `backups\open-brain-backup-<date>.json`: everything needed to restore, including archived
+  thoughts and graph links. Embeddings are left out (the backfill jobs rebuild them).
+- `export-log.txt`: what each run did, including items that **no longer exist** in the brain.
+
+It never deletes files. It refuses to run if the folder is inside OneDrive (or Dropbox/Google
+Drive) or inside a git repo, because this is private text. **Treat the folder as a read-only
+copy**: edits you make there are overwritten by next week's export.
+
+Needs item 3 deployed first.
+
+**Test, step by step:**
+```powershell
+node "$env:USERPROFILE\.open-brain\scripts\weekly-export.js" --check
+```
+Should print `OK thoughts`, `OK library`, `OK thought_links`, `Connection works`. Then the real run:
+```powershell
+node "$env:USERPROFILE\.open-brain\scripts\weekly-export.js"
+```
+Run it a second time: it should say this week's export already exists. Open the folder and check
+a few files. Local tests (any computer):
+`node --experimental-strip-types --test pc-setup/tests/weekly-export.test.mjs`
+
+**Schedule it** (PowerShell; the task runs every 4 hours while you're logged in, and the script
+exits straight away once this week is done, so a missed run — PC off, no internet — is retried
+automatically. "Restart on failure" isn't used because it doesn't fire when a program just exits
+with an error):
+```powershell
+$node = (Get-Command node).Source
+$script = "$env:USERPROFILE\.open-brain\scripts\weekly-export.js"
+$action = New-ScheduledTaskAction -Execute $node -Argument "`"$script`""
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddHours(10) -RepetitionInterval (New-TimeSpan -Hours 4)
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 1) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName "Open Brain weekly export" -Action $action -Trigger $trigger -Settings $settings -Description "Exports Open Brain to %USERPROFILE%\open-brain-export once a week"
+```
+Check it: `Start-ScheduledTask "Open Brain weekly export"`, then
+`Get-ScheduledTaskInfo "Open Brain weekly export"` → `LastTaskResult` should be `0`.
+
+A black window may flash for a moment every 4 hours. To hide it (Windows 11; untested here),
+re-register with `-Execute "conhost.exe" -Argument "--headless `"$node`" `"$script`""` in the
+action line. If the task then shows a non-zero `LastTaskResult`, go back to the plain version.
+
+**Undo:** `Unregister-ScheduledTask "Open Brain weekly export" -Confirm:$false`. The export folder
+stays; delete it by hand if you want.
