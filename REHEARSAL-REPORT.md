@@ -304,7 +304,7 @@ Don't commit while it's renamed.
 `backfill-chunks`, `backfill-embeddings`, `backfill-links`, `call-llm` and `generate-embedding`
 don't need a redeploy: no file they import changed. **(fixes)** `weekly-digest` now does (4k).
 
-**5. Make the app live.** `sw.js` is already updated on this branch (6 new files, `VERSION = 'ob-2026-11-04-merge1'`).
+**5. Make the app live.** `sw.js` is already updated on this branch (6 new files; **(fixes)** `VERSION = 'ob-2026-11-04-fixes1'`).
 Merge `cloud/go-live-fixes` **(fixes)** into `master`, preferably through a pull request on GitHub, and push. Vercel redeploys.
 Checks on the phone (open the app, close it fully, open it again so the new service worker takes over):
 - Brain shows Map / Thoughts / Review;
@@ -312,6 +312,8 @@ Checks on the phone (open the app, close it fully, open it again so the new serv
 - **Edit** a test thought, Save, then search for the new word;
 - Review says "Nothing waiting" (or shows the proposal from 4b);
 - Study → Library opens entries.
+- **(fixes)** Today shows the morning summary under the notifications line (folded if already delivered), or
+  nothing at all if `bc-calendar` doesn't answer `summary` yet. No error message either way.
 
 Undo: `git revert -m 1 <merge commit>` and push. Vercel puts the old app back, and the new functions don't hurt the old app.
 

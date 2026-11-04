@@ -14,7 +14,7 @@ Nothing was pushed to master, no other branch was changed, nothing was deployed,
 | # | Fix | Status |
 |---|---|---|
 | 1 | Forged service tokens (`weekly-digest`, `daily-quiz`, `gap-questions`, `weekly-condenser`) | **done**, commit `67ba821` |
-| 2 | Today page shows the morning summary | not started |
+| 2 | Today page shows the morning summary | **done**, commit `c0d5e58` |
 | 3 | Ask skips door-flagged library entries (P6) | not started |
 | 4 | Backup keeps `library_links` (P7) | not started |
 
@@ -104,6 +104,41 @@ the schedule exactly as today. `weekly-condenser` is new: undo it as in the rehe
 
 ---
 
+## Fix 2: the Today page shows the morning summary
+
+### What it does, in plain words
+Each time the Today tab loads, `planner.js` now also asks `bc-calendar` for `{action: "summary"}` (through the same
+`api` helper the page already uses). A new box (`<div id="plannerSummary">` in `index.html`, between the
+notifications line and "Waiting for your OK") shows:
+- **Morning summary** with its time, and the summary text (line breaks kept, cut at 1,500 characters);
+- **Still waiting**: up to 8 items, each with its text (cut at 200 characters), a small chip for `kind`, and the time.
+
+When the summary is already delivered (`delivered: true`) and nothing is waiting, it's folded into a small grey
+"Morning summary · 7:00 AM" line you can tap to open, the same style as "Notifications: on".
+If the call fails, an older `bc-calendar` answers with an error, the reply isn't `ok: true`, or there is nothing to
+show, the box stays **empty**: no error message. Every piece of outside text (summary, waiting text, kind, time)
+goes through the page's existing `esc`, so email subjects can't add HTML or run code.
+The drawing is a small function, `plannerSummaryHtml`, exported like the other planner helpers so it can be tested.
+`bc-calendar` itself was not touched (it's in the private repo).
+
+`sw.js`: `VERSION` bumped once, `ob-2026-11-04-merge1` → `ob-2026-11-04-fixes1`, so phones pick up the new
+`planner.js` and `index.html`. No file was added to `SHELL`. This is the only bump on this branch.
+
+### Tests (`tests/go-live-fixes/morning-summary.test.mjs`, 8 tests)
+- summary + waiting list shown; delivered + nothing waiting → folded `<details>`; delivered + something waiting → open;
+  no summary but waiting items → just the list;
+- 14 bad or empty replies (error object, older version's `{error: "Unknown action"}`, `ok:false`, no summary, blank
+  text, wrong types…) → nothing at all;
+- made-up `<script>alert(1)</script>` and `<img src=x onerror="alert(2)">` in the text, kind and time stay text,
+  using the page's real `esc` (read out of `planner.js`, so the test follows any change to it);
+- in headless Chromium: that HTML creates no `<script>`/`<img>` elements and no alert;
+- in headless Chromium, the **real `planner.js`** on the **real Today markup** from `index.html` with a fake `sb`:
+  it calls `bc-calendar` with `{action: "summary"}` and shows the box; with an error reply or a thrown error the
+  box is empty, there are no page errors, and no error note appears.
+I also took a phone-size screenshot with the page's own styles to check it looks like the rest of Today (not committed).
+
+---
+
 ## Changes to REHEARSAL-REPORT.md's go-live list (already made there, marked **(fixes)**)
 1. Top of the list, steps 0, 1 and 5: use **`cloud/go-live-fixes`** instead of `cloud/merge-rehearsal`.
 2. Step 3: also check `SUPABASE_ANON_KEY` is listed in secrets (fix 1's Auth check needs it).
@@ -117,6 +152,8 @@ the schedule exactly as today. `weekly-condenser` is new: undo it as in the rehe
 7. The "don't need a redeploy" line no longer lists `weekly-digest`.
 8. Step 6 (condenser schedule): test-run the job once the same way.
 9. Step 9 (paperwork): add the CLAUDE.md lines suggested below.
+11. Step 5 (fix 2): `sw.js` is now `VERSION = 'ob-2026-11-04-fixes1'`. Extra phone check: Today shows the morning
+    summary (or nothing, if `bc-calendar` doesn't know `summary` yet). No deploy step: it's part of the app merge.
 10. P3 in the problem table is marked fixed on this branch.
 
 ## Suggested lines for CLAUDE.md (not edited, as instructed)
