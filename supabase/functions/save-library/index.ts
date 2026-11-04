@@ -13,6 +13,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { firstLine, inBackground, indexLibraryEntry, saveLibraryEntry } from "../_shared/library.ts";
+import { doorCheckViaGateway } from "../_shared/door-check.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -60,21 +61,25 @@ Deno.serve(async (req: Request) => {
       : {};
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+    const title = str(body?.title) ?? firstLine(content);
+    // Door check: flags text that tries to instruct an AI. Never blocks the save. Patterns run
+    // over the whole text; only a small sample ever goes to the AI.
+    const door_check = await doorCheckViaGateway(`${title}\n${content}`, user.id, "save-library");
     const saved = await saveLibraryEntry(admin, {
       user_id: user.id,
-      title: str(body?.title) ?? firstLine(content),
+      title,
       content,
       doc_type: docType,
       course,
       topic: str(body?.topic),
       source_url: str(body?.source_url, 2000),
-      metadata: { ...metadata, source: str(body?.source, 40) ?? "app" },
+      metadata: { ...metadata, source: str(body?.source, 40) ?? "app", door_check }, // ours wins over any sent in the body
     });
 
     // Long PDFs can take a while to embed, so that work carries on after we answer.
     await inBackground(indexLibraryEntry(admin, saved.id, content, "save-library"));
 
-    return jsonResponse({ ok: true, id: saved.id, updated: saved.updated, library: true });
+    return jsonResponse({ ok: true, id: saved.id, updated: saved.updated, library: true, door_flagged: door_check.flagged });
   } catch (err) {
     console.error("save-library failed:", String(err));
     return jsonResponse({ ok: false, error: "Could not save to the library. See function logs." }, 500);

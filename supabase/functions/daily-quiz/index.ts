@@ -110,6 +110,7 @@ Deno.serve(async (req) => {
         .select("content, created_at")
         .eq("user_id", OWNER_USER_ID)
         .is("archived_at", null)
+        .is("outdated_at", null) // notes marked outdated aren't quiz material (needs the 2026-11-03 SQL)
         .gte("created_at", since)
         .or("category.is.null,category.neq.digest")
         .order("created_at", { ascending: false })

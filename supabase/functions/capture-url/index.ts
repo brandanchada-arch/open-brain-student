@@ -12,6 +12,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { indexLibraryEntry, saveLibraryEntry } from "../_shared/library.ts";
+import { doorCheckViaGateway } from "../_shared/door-check.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -141,6 +142,8 @@ Deno.serve(async (req: Request) => {
     // not the brain. The library row gets its embedding + chunks right here
     // (the enrich-thought webhook only runs for thoughts).
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    // Door check: flags text that tries to instruct an AI. Never blocks the save.
+    const door_check = await doorCheckViaGateway(`${title}\n${content}`, user.id, "capture-url");
     let saved: { id: string };
     try {
       saved = await saveLibraryEntry(admin, {
@@ -149,7 +152,7 @@ Deno.serve(async (req: Request) => {
         content,
         doc_type: "article",
         source_url: parsed.toString(),
-        metadata: { source: "url", title, url: parsed.toString(), hostname: parsed.hostname },
+        metadata: { source: "url", title, url: parsed.toString(), hostname: parsed.hostname, door_check },
       });
     } catch (insertError) {
       console.error("[url] Insert failed:", String(insertError));
@@ -163,6 +166,7 @@ Deno.serve(async (req: Request) => {
       library: true,
       title,
       hostname: parsed.hostname,
+      door_flagged: door_check.flagged,
       preview: content.slice(0, 240) + "…",
     });
   } catch (err) {
