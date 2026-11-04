@@ -20,7 +20,7 @@ explain changes in plain language.
 | `enrich-thought` | DB webhook on insert: embedding → graph links → chunks (long thoughts) → tags/category/summary |
 | `generate-embedding` | Text → 1536-number embedding via OpenRouter (`openai/text-embedding-3-small`). Returns `{embedding: null}` on failure, never throws |
 | `call-llm` | LLM gateway; provider picked by `LLM_PROVIDER` secret. Nothing else talks to an AI company directly |
-| `open-brain-mcp` | MCP server for Claude Desktop (`search_thoughts`, `list_recent`, `add_thought`, plus library tools `search_library`, `list_library`, `get_library_entry`, `library_quiz_material`). Auth: `MCP_ACCESS_KEY` in the `Authorization: Bearer` header |
+| `open-brain-mcp` | MCP server for Claude Desktop (`search_thoughts`, `list_recent`, `add_thought`, plus library tools `search_library`, `list_library`, `get_library_entry`, `library_quiz_material`, and `save_to_library`, which saves a page Claude has read into the library with the door check; `add_thought` is only for the owner's own thoughts). Auth: `MCP_ACCESS_KEY` in the `Authorization: Bearer` header |
 | `search-brain` | The app's Search tab. Identifies the caller from their login token. `{library: true, course, doc_type, topic}` searches the library instead |
 | `capture-url`, `capture-youtube` | Save an article / YouTube transcript to the **library** (doc_type `article` / `transcript`), with embedding + chunks |
 | `save-library` | The app's PDF upload and pasted transcripts → library (embedding + chunks in the background) |
@@ -30,6 +30,7 @@ explain changes in plain language.
 | `backfill-embeddings`, `backfill-links`, `backfill-chunks` | One-time catch-up jobs, run in a PowerShell loop until `remaining` is 0. `backfill-chunks {"library": true}` repairs library embeddings/chunks |
 | `_shared/chunking.ts`, `_shared/thought-chunks.ts` | Chunking logic copied from open-brain-express; `generateEmbedding` adapted to call our own `generate-embedding` |
 | `_shared/library.ts` | Save a library entry, embed + chunk it, pick random quiz notes |
+| `_shared/library-mcp.ts` | The MCP `save_to_library` tool: checks the input (max 400,000 chars), re-saving a URL updates that entry, door check + embedding + chunks |
 
 ## Database objects that matter
 - `thoughts` (RLS on; `user_id`, `content`, `embedding`, `metadata`, `content_tsv`)

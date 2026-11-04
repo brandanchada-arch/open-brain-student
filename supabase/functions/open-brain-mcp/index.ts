@@ -5,7 +5,11 @@
 // It speaks JSON-RPC 2.0 over HTTP, which is what MCP uses under the hood.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { pickQuizMaterial } from "../_shared/library.ts";
+import { inBackground, indexLibraryEntry, pickQuizMaterial } from "../_shared/library.ts";
+import { doorCheckViaGateway } from "../_shared/door-check.ts";
+import {
+  ADD_THOUGHT_DESCRIPTION, LibraryInputError, MAX_CONTENT_CHARS, SAVE_DOC_TYPES, SAVE_TO_LIBRARY_DESCRIPTION, saveToLibrary,
+} from "../_shared/library-mcp.ts";
 import {
   ADD_SESSION_LOG_DESCRIPTION, addSessionLog, GET_CORE_DESCRIPTION, getCoreText, MCP_INSTRUCTIONS,
 } from "../_shared/core-memory.ts";
@@ -96,7 +100,7 @@ const TOOLS = [
   },
   {
     name: "add_thought",
-    description: "Save a new thought to the brain.",
+    description: ADD_THOUGHT_DESCRIPTION,
     inputSchema: {
       type: "object",
       properties: {
@@ -106,6 +110,26 @@ const TOOLS = [
     },
   },
   // ---- Reference Library (2026-10-22): class notes, transcripts, articles, digests ----
+  {
+    name: "save_to_library",
+    description: SAVE_TO_LIBRARY_DESCRIPTION,
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "The page title (max 200 characters)" },
+        content: {
+          type: "string",
+          description: `The readable text of the page (max ${MAX_CONTENT_CHARS.toLocaleString("en-US")} characters)`,
+        },
+        source_url: { type: "string", description: "The page address (http or https)" },
+        doc_type: { type: "string", enum: SAVE_DOC_TYPES, description: "Optional, default article" },
+        course: { type: "string", description: "Optional course code, e.g. BUS-485" },
+        topic: { type: "string", description: "Optional topic" },
+        tags: { type: "array", items: { type: "string" }, description: "Optional tags" },
+      },
+      required: ["title", "content", "source_url"],
+    },
+  },
   {
     name: "search_library",
     description:
@@ -330,6 +354,14 @@ function textResult(id: number | string | null, value: unknown) {
   );
 }
 
+// A mistake in the tool arguments: shown to the AI as a normal tool error it can fix and retry.
+function toolError(id: number | string | null, message: string) {
+  return new Response(
+    JSON.stringify(rpcResult(id, { content: [{ type: "text", text: message }], isError: true })),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+}
+
 const optStr = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
 
 Deno.serve(async (req) => {
@@ -374,7 +406,7 @@ Deno.serve(async (req) => {
         JSON.stringify(rpcResult(id, {
           protocolVersion: "2024-11-05",
           capabilities: { tools: {} },
-          serverInfo: { name: "open-brain-mcp", version: "1.5.0" },
+          serverInfo: { name: "open-brain-mcp", version: "1.6.0" },
           // Clients that support it add this to Claude's context. Not all do,
           // so get_core's description says the same thing.
           instructions: MCP_INSTRUCTIONS,
@@ -518,6 +550,24 @@ Deno.serve(async (req) => {
 
       // ---------------- Reference Library tools ----------------
       // All of them use the service role, so every query is filtered to OWNER_USER_ID.
+      if (toolName === "save_to_library") {
+        // The owner always comes from the OWNER_USER_ID secret, never from the arguments.
+        if (!OWNER_USER_ID) {
+          throw new Error("OWNER_USER_ID is not set in Edge Function secrets");
+        }
+        const owner = OWNER_USER_ID;
+        try {
+          return textResult(id, await saveToLibrary(supabase, owner, args, {
+            doorCheck: (text) => doorCheckViaGateway(text, owner, "open-brain-mcp"),
+            // Long pages take a while to embed, so that carries on after the reply (as in save-library).
+            index: (libraryId, content) => inBackground(indexLibraryEntry(supabase, libraryId, content, "save_to_library")),
+          }));
+        } catch (err) {
+          if (err instanceof LibraryInputError) return toolError(id, `save_to_library: ${err.message}`);
+          throw err;
+        }
+      }
+
       if (["search_library", "list_library", "get_library_entry", "library_quiz_material"].includes(toolName)) {
         if (!OWNER_USER_ID) {
           throw new Error("OWNER_USER_ID is not set in Edge Function secrets");
