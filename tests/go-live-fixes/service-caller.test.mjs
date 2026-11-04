@@ -8,6 +8,7 @@ import { createHmac } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { installFakeDeno, installFakeFetch, FAKE_URL } from '../ask-edit-check/helpers.mjs';
 import { OWNER, OWNER_LOGIN, OTHER_LOGIN } from './fake-supabase.mjs';
 
@@ -41,7 +42,7 @@ async function load(name, env = {}) {
     .replaceAll('"./handler.ts"', JSON.stringify(new URL(`${name}/handler.ts`, FN).href));
   const copy = join(TMP, `${name}-${++copies}.ts`);
   writeFileSync(copy, src);
-  await import(copy);
+  await import(pathToFileURL(copy).href);
   return served.handler;
 }
 

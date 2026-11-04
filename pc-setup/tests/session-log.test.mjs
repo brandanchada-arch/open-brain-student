@@ -45,7 +45,10 @@ async function endSession(home, transcript, extraEnv = {}) {
   return { r, log };
 }
 
-test("writes a redacted, short log in the background; claude runs once (loop guard works); no upload by default", async () => {
+// The fake `claude` in fake-bin/ is a shell script, which Windows cannot run as a program.
+const FAKE_CLAUDE_SKIP = process.platform === "win32" && "needs the fake claude shell script (Linux or Mac only)";
+
+test("writes a redacted, short log in the background; claude runs once (loop guard works); no upload by default", { skip: FAKE_CLAUDE_SKIP }, async () => {
   const srv = await startFakeServer();
   const home = tempHome([`OPEN_BRAIN_FUNCTIONS_URL=${srv.url}`, `MCP_ACCESS_KEY=${FAKE_KEY}`]);
   try {
@@ -78,7 +81,7 @@ test("writes a redacted, short log in the background; claude runs once (loop gua
   } finally { await srv.close(); }
 });
 
-test("negative control: without the guard the same setup DOES loop (so the test above is meaningful)", async () => {
+test("negative control: without the guard the same setup DOES loop (so the test above is meaningful)", { skip: FAKE_CLAUDE_SKIP }, async () => {
   const home = tempHome([]);
   const { log } = await endSession(home, writeTranscript(home, 4), { FAKE_STRIP_GUARD: "1" });
   const looped = await waitFor(() => calls(log).length >= 2, 15000);
@@ -109,7 +112,7 @@ test("short sessions and the off switch are skipped", async () => {
   assert.equal(logsIn(off).length, 0);
 });
 
-test("upload on: sends add_session_log with a capped, redacted summary", async () => {
+test("upload on: sends add_session_log with a capped, redacted summary", { skip: FAKE_CLAUDE_SKIP }, async () => {
   const srv = await startFakeServer();
   const home = tempHome([`OPEN_BRAIN_FUNCTIONS_URL=${srv.url}`, `MCP_ACCESS_KEY=${FAKE_KEY}`, "SESSION_LOG_UPLOAD=on", "SESSION_LOG_PROJECT=demo"]);
   try {
@@ -125,7 +128,7 @@ test("upload on: sends add_session_log with a capped, redacted summary", async (
   } finally { await srv.close(); }
 });
 
-test("never falls back to an unrestricted `claude -p` when the strict flags are rejected", async () => {
+test("never falls back to an unrestricted `claude -p` when the strict flags are rejected", { skip: FAKE_CLAUDE_SKIP }, async () => {
   const home = tempHome([]);
   const { log } = await endSession(home, writeTranscript(home, 4), { FAKE_FAIL_STRICT: "1" });
   const errLog = path.join(home, "claude-session-logs", ".worker-errors.log");

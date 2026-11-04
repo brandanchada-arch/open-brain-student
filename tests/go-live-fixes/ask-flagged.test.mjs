@@ -105,14 +105,14 @@ test('search-brain\'s lookup reads only this user\'s rows and reads the flag fro
 // Telegram /ask: the real telegram-bot/index.ts with a fake Deno + fake fetch (as in telegram-lock.test.mjs).
 import { installFakeDeno, installFakeFetch, FAKE_URL } from '../ask-edit-check/helpers.mjs';
 import { copyFileSync, mkdirSync, mkdtempSync, symlinkSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 test('Telegram /ask: a flagged library hit is looked up (owner only) and kept away from the AI', async () => {
   const TMP = mkdtempSync(join(tmpdir(), 'tg-flag-'));
   mkdirSync(join(TMP, 'telegram-bot'));
-  symlinkSync(fileURLToPath(new URL('../../supabase/functions/_shared', import.meta.url)), join(TMP, '_shared'));
+  symlinkSync(fileURLToPath(new URL('../../supabase/functions/_shared', import.meta.url)), join(TMP, '_shared'), 'junction');
   const OWNER = '00000000-0000-0000-0000-000000000001';
   const served = installFakeDeno({
     TELEGRAM_BOT_TOKEN: 'fake-token', OWNER_USER_ID: OWNER, SUPABASE_URL: FAKE_URL, SUPABASE_SERVICE_ROLE_KEY: 'fake-service-key',
@@ -120,7 +120,7 @@ test('Telegram /ask: a flagged library hit is looked up (owner only) and kept aw
   });
   const copy = join(TMP, 'telegram-bot', 'bot.ts');
   copyFileSync(new URL('../../supabase/functions/telegram-bot/index.ts', import.meta.url), copy);
-  await import(copy);
+  await import(pathToFileURL(copy).href);
   const sent = [];
   const prompts = [];
   const calls = installFakeFetch([

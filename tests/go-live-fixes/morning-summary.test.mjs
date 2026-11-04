@@ -4,11 +4,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
 const PLANNER = new URL('../../planner.js', import.meta.url);
-const { plannerSummaryHtml } = require(PLANNER.pathname);
+const { plannerSummaryHtml } = require(fileURLToPath(PLANNER));
 const src = readFileSync(PLANNER, 'utf8');
 const escLine = src.match(/^\s*const esc = (s => .*);$/m);
 assert.ok(escLine, 'planner.js still has its esc helper');

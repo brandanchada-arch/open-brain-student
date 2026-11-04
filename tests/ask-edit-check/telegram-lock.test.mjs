@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installFakeDeno, installFakeFetch, FAKE_URL } from './helpers.mjs';
 import { copyFileSync, mkdirSync, mkdtempSync, symlinkSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -12,7 +12,7 @@ const BOT_FILE = new URL('../../supabase/functions/telegram-bot/index.ts', impor
 const TMP = mkdtempSync(join(tmpdir(), 'tg-lock-'));
 // The bot imports ../_shared/ask.ts, so mirror that folder layout next to the copies.
 mkdirSync(join(TMP, 'telegram-bot'));
-symlinkSync(fileURLToPath(new URL('../../supabase/functions/_shared', import.meta.url)), join(TMP, '_shared'));
+symlinkSync(fileURLToPath(new URL('../../supabase/functions/_shared', import.meta.url)), join(TMP, '_shared'), 'junction');
 let copies = 0;
 
 const OWNER_TG = '111222333';          // made-up Telegram id
@@ -26,7 +26,7 @@ async function loadBot(env) {
   // A fresh copy of the file each time, so the env above is read again (Node caches modules).
   const copy = join(TMP, 'telegram-bot', `bot-${++copies}.ts`);
   copyFileSync(BOT_FILE, copy);
-  await import(copy);
+  await import(pathToFileURL(copy).href);
   return served.handler;
 }
 
