@@ -20,7 +20,7 @@ explain changes in plain language.
 | `enrich-thought` | DB webhook on insert: embedding → graph links → chunks (long thoughts) → tags/category/summary |
 | `generate-embedding` | Text → 1536-number embedding via OpenRouter (`openai/text-embedding-3-small`). Returns `{embedding: null}` on failure, never throws |
 | `call-llm` | LLM gateway; provider picked by `LLM_PROVIDER` secret. Nothing else talks to an AI company directly |
-| `open-brain-mcp` | MCP server for Claude Desktop (`get_core`, `add_session_log`, `search_thoughts`, `list_recent`, `add_thought`, plus library tools `search_library`, `list_library`, `get_library_entry`, `library_quiz_material`). Auth: `MCP_ACCESS_KEY` in the `Authorization: Bearer` header |
+| `open-brain-mcp` | MCP server for Claude Desktop (`get_core`, `add_session_log`, `search_thoughts`, `list_recent`, `add_thought`, plus library tools `search_library`, `list_library`, `get_library_entry`, `library_quiz_material`, and `save_to_library`, which saves a page Claude has read into the library with the door check; `add_thought` is only for the owner's own thoughts). Auth: `MCP_ACCESS_KEY` in the `Authorization: Bearer` header |
 | `search-brain` | The app's Search tab. Identifies the caller from their login token. `{library: true, course, doc_type, topic}` searches the library instead. `{ask: true}` = Ask mode (`_shared/ask.ts`) |
 | `edit-thought` | Edit a thought / mark it outdated. User from the login token; old text goes to `thought_versions`; rebuilds embedding, links, chunks and tags via `_shared/enrich.ts` + `_shared/thought-edit.ts` |
 | `review-proposal` | Brain → Review: approve / reject / undo brain page changes. User from the login token. Normal deploy (token check on) |
@@ -38,6 +38,7 @@ explain changes in plain language.
 | `_shared/ask.ts`, `_shared/enrich.ts`, `_shared/thought-edit.ts` | Ask mode; enrichment shared by `enrich-thought` and edits; the rebuild after an edit |
 | `_shared/door-check.ts` | Flags library text that tries to give an AI orders. Never blocks a save. Ask and the condenser leave flagged entries out |
 | `_shared/core-memory.ts` | `get_core` and `add_session_log` logic |
+| `_shared/library-mcp.ts` | The MCP `save_to_library` tool: checks the input (max 400,000 chars), re-saving a URL updates that entry, door check + embedding + chunks |
 
 ## Database objects that matter
 - `thoughts` (RLS on; `user_id`, `content`, `embedding`, `metadata`, `content_tsv`)
