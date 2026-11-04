@@ -24,7 +24,7 @@ already on master (not caused by these branches). It doesn't block go-live, but 
 |---|---|---|---|
 | P1 | Medium | `cloud/pc-setup` session-log worker could fall back to an unrestricted `claude -p` | **Fixed here** (commit `73d0e4a`) |
 | P2 | Medium | `cloud/check-command` root `package.json` breaks `npm:` imports in plain Deno | **Open**, workaround in go-live step 4 |
-| P3 | Medium | `master` (not these branches): `weekly-digest` lets in a fake service-role token | **Open**, outside scope |
+| P3 | Medium | `master` (not these branches): `weekly-digest` lets in a fake service-role token | **Fixed on `cloud/go-live-fixes`** (fix 1 in `FIXES-REPORT.md`; also `daily-quiz`, `gap-questions`, `weekly-condenser`) |
 | P4 | Low | `cloud/check-command`: Vercel will see `package.json` | Open, checked by the preview in go-live step 1 |
 | P5 | Low | personal details (no keys or real user ids found) | Open, optional tidy-up |
 | P6 | Low | `cloud/ask-edit-check`: Ask also sends library entries the door check flagged | Open |
@@ -218,6 +218,9 @@ The test scripts are not committed, to keep the site's public files unchanged.
 
 ## Combined go-live list for the PC session (exact order)
 
+> **Updated by `cloud/go-live-fixes`** (see `FIXES-REPORT.md`). Take **`cloud/go-live-fixes`** live, not
+> `cloud/merge-rehearsal`: it is the rehearsal plus four fixes. Changed or added steps are marked **(fixes)**.
+
 Run everything from the `open-brain-student` folder in PowerShell. Never from `C:\Users\<you>`.
 `<ref>` = `zqbjxbdborfahsomluye`. Do one step, check it, then go to the next.
 **General undo for any function:** keep a master copy next to the repo
@@ -226,13 +229,13 @@ Run everything from the `open-brain-student` folder in PowerShell. Never from `C
 this merge has no master copy: undo it with `npx supabase functions delete <name> --project-ref <ref>`.
 
 **0. Prepare (nothing live changes).**
-`git fetch origin`, then `git switch cloud/merge-rehearsal`. Install Deno the normal way
+`git fetch origin`, then `git switch cloud/go-live-fixes` **(fixes)**. Install Deno the normal way
 (`irm https://deno.land/install.ps1 | iex`), then run `npm install` and `npm run check`. Expect `Check passed`, with
 all 20 function folders type-checked (the PC can reach esm.sh).
 Undo: nothing to undo.
 
 **1. Vercel preview (nothing live changes).** The branch is already pushed, so Vercel should already have a
-**preview** for `cloud/merge-rehearsal`. Open it from the Vercel dashboard and check two things:
+**preview** for `cloud/go-live-fixes` **(fixes)**. Open it from the Vercel dashboard and check two things:
 - the build log shows no error;
 - the site loads and you can sign in.
 
@@ -268,6 +271,15 @@ Undo:
 If either Telegram lock secret is missing, set it now and follow section 1 of `BUILD-NOTES-ask-edit-check.md` when
 you deploy `telegram-bot` (step 4h).
 Undo: `npx supabase secrets unset NAME --project-ref <ref>` for anything you added.
+Also check `SUPABASE_ANON_KEY` is listed (Supabase normally adds it by itself). **(fixes)** The new service check
+uses it to ask Supabase Auth about a token that isn't exactly your service key; without it, only the exact key works.
+
+**3b. (fixes) See how the scheduled jobs call the functions (read-only, prints no keys).** In the SQL Editor:
+`select jobname, schedule, command ~* 'authorization' as sends_token, command ~ 'vault\.decrypted_secrets' as token_from_vault, command ~* '(weekly-digest|daily-quiz|gap-questions|weekly-condenser)' as calls_changed_fn from cron.job;`
+Don't select `command` itself: it may contain your key. Write down every job where `calls_changed_fn` is true; you
+will test-run each one in step 4k. A job with `sends_token = false` is already refused today (old and new code both
+refuse a missing token), so the fix doesn't change it; note it for later.
+Undo: nothing (read-only).
 
 **4. Deploy functions, in this order** (`npx supabase functions deploy <name> --project-ref <ref>` plus the flag shown).
 **P2 test:** 4a is brand new, so it's the safe first try. If it fails with "Could not find a matching package for
@@ -278,21 +290,22 @@ Don't commit while it's renamed.
 | | Function | Flags | Check after | Undo |
 |---|---|---|---|---|
 | a | `review-proposal` (new) | none (keep the token check) | POST without signing in → 401 | delete it |
-| b | `weekly-condenser` (new) | none: **never `--no-verify-jwt`** (P3) | POST with header `Authorization: Bearer x.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.x` (a made-up token) → must be **401**. Then run it once by hand with the service role key (core-memory notes step 4) → `{"ok": true, …}` | delete it; reject any proposals |
+| b | `weekly-condenser` (new) | none: **never `--no-verify-jwt`** (P3). Includes fix 1. | POST with header `Authorization: Bearer x.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.x` (a made-up token) → must be **401**. Then run it once by hand with the service role key (core-memory notes step 4) → `{"ok": true, …}` | delete it; reject any proposals |
 | c | `open-brain-mcp` | `--no-verify-jwt` | Claude Desktop lists `get_core`; calling it says "The core page is empty so far" (or shows your text); `search_thoughts` still works | redeploy from `..\ob-master` with `--no-verify-jwt` |
 | d | `edit-thought` (new) | none | POST without signing in → 401 | delete it |
 | e | `search-brain` | none (same as before) | live app's Search still works | redeploy from master copy |
 | f | `capture-url`, `capture-youtube`, `save-library` | same as before (none) | capture one test web page from the live app. In the SQL Editor, `select metadata->'door_check' from library order by created_at desc limit 1;` → `{"flagged": false, …}` | redeploy from master copy |
-| g | `daily-quiz`, `gap-questions` | `--no-verify-jwt` (only after step 2!) | Study → Quiz and Gaps load in the live app | redeploy from master copy with `--no-verify-jwt` |
+| g | `daily-quiz`, `gap-questions` **(fixes: include fix 1)** | `--no-verify-jwt` (only after step 2!) | 1. Study → Quiz and Gaps load in the live app (your login stays in app mode). 2. POST each with the made-up token from 4b → **401** and **no** Telegram message. 3. POST `daily-quiz` once with `Authorization: Bearer <service role key>` → `{"ok":true,"sent":3,…}` (or `skipped`) and a quiz in Telegram. | `cd ..\ob-master; npx supabase functions deploy <name> --project-ref <ref> --no-verify-jwt` |
 | h | `telegram-bot` | `--no-verify-jwt` | `/recent` still answers; `/ask what did I do last week?` → short answer + "Notes used" | redeploy from master copy with `--no-verify-jwt`, then POST `{"setup": true}` with the secret header |
 | i | `enrich-thought` | none (`config.toml` keeps `verify_jwt = false`) | add a test thought in the app; within a minute it has tags | redeploy from master copy |
 | j | `export-brain` (new) | `--no-verify-jwt` | POST with `Authorization: Bearer wrong` → 401 | delete it |
+| k | **(fixes)** `weekly-digest` (fix 1) | none (`config.toml` keeps `verify_jwt = false` for it) | 1. POST with the made-up token from 4b → **401**. 2. **Go-live test run of the real Sunday job** (and of every job from step 3b): in the SQL Editor run `do $$ begin execute (select command from cron.job where jobname = '<job name from 3b>'); end $$;` then, after a minute, Edge Functions → `weekly-digest` → Logs must show `Saved digest …` or `No digest this week`, **not** 401. (Costs one AI call; same-week digest is updated, not duplicated.) For a `daily-quiz`/`gap-questions` job, success is a new message in Telegram. | If the job gets 401: `cd ..\ob-master; npx supabase functions deploy weekly-digest --project-ref <ref>` (for quiz/gaps add `--no-verify-jwt`), then note it in `FIXES-REPORT.md` |
 
-`backfill-chunks`, `backfill-embeddings`, `backfill-links`, `weekly-digest`, `call-llm` and `generate-embedding`
-don't need a redeploy: no file they import changed.
+`backfill-chunks`, `backfill-embeddings`, `backfill-links`, `call-llm` and `generate-embedding`
+don't need a redeploy: no file they import changed. **(fixes)** `weekly-digest` now does (4k).
 
 **5. Make the app live.** `sw.js` is already updated on this branch (6 new files, `VERSION = 'ob-2026-11-04-merge1'`).
-Merge `cloud/merge-rehearsal` into `master`, preferably through a pull request on GitHub, and push. Vercel redeploys.
+Merge `cloud/go-live-fixes` **(fixes)** into `master`, preferably through a pull request on GitHub, and push. Vercel redeploys.
 Checks on the phone (open the app, close it fully, open it again so the new service worker takes over):
 - Brain shows Map / Thoughts / Review;
 - Thoughts → type a question → **Ask** works;
@@ -306,6 +319,8 @@ Undo: `git revert -m 1 <merge commit>` and push. Vercel puts the old app back, a
 `2026-11-03-core-memory.sql` section 8, replace `<project-ref>` and `<VAULT_SECRET_NAME_PLACEHOLDER>`, then run only
 that block in the SQL Editor. **Don't commit the filled-in file.**
 Check: `select jobname, schedule from cron.job;` shows `weekly-brain-condenser` at `0 16 * * 0`, after the digest.
+**(fixes)** Test run it once the same way as 4k: `do $$ begin execute (select command from cron.job where jobname = 'weekly-brain-condenser'); end $$;`
+→ `weekly-condenser` Logs show `weekly-condenser: {"ok":true…` and not 401.
 Undo: `select cron.unschedule('weekly-brain-condenser');`
 
 **7. PC setup** (needs 4c and 4j live). Follow `pc-setup/README.md` items 1 → 2 → 3 (already deployed in 4j) →
@@ -319,7 +334,8 @@ Undo: delete the rule.
 **9. Paperwork.** Add the new functions, tables and `_shared` files to `CLAUDE.md`. The suggested lines are at the end
 of `BUILD-NOTES-ask-edit-check.md`, plus `review-proposal`, `weekly-condenser`, `export-brain`, `brain_pages`,
 `brain_proposals`, `session_logs` from core-memory and pc-setup. Note there that `weekly-condenser` must keep its
-token check (P3), and add the P2 deploy workaround if step 4a needed it.
+token check (P3), and add the P2 deploy workaround if step 4a needed it. **(fixes)** Also add the lines suggested
+in `FIXES-REPORT.md` (`_shared/service-caller.ts`, and `weekly-digest` added to the "redeploy when `_shared/` changes" list).
 
 ---
 
