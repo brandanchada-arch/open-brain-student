@@ -11,14 +11,17 @@ Read `OVERNIGHT-BRIEF.md` for the rules and order. If you're resuming, carry on 
 - Item 1 (tonight's part): evidence, query and guide in `NEEDS-BRANDAN.md`. The 7:05 AM task writes `PUSH-LOG-RESULT.md`.
 - Item 2: health check committed on both branches, fresh check passed. Pushes are refused in this unattended run (see `NEEDS-BRANDAN.md`), so commits are local only.
 
-- Item 3: news filter committed; fresh check running. Real YouTube feeds are unproven: see `NEEDS-BRANDAN.md`.
+- Item 3: news filter committed, fresh check passed. Real YouTube feeds are unproven: see `NEEDS-BRANDAN.md`.
 - Item 4: living topic pages committed.
+- Item 5: Friday suggestions committed, fresh check passed.
+- Item 6: small fixes committed. The import cleanup is its own commit.
+- Item 7: Telegram and session-log tests committed. The session-log tests now run on Windows through a small `.cmd` shim, instead of Git Bash.
 
 ## In progress
-- Item 5: Friday suggestions.
+- Fresh check of Items 4, 6 and 7, then the morning report.
 
 ## Next
-- Items 6 to 8, in the brief's order, plus the 7:05 AM push log read.
+- Item 8, and the 7:05 AM push log read.
 
 ## Decisions made along the way
 - Brandan's mid-night instruction: don't ask; make the best guess, log it, get it done. Brain may be read for context, never written.

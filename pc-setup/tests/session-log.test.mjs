@@ -1,6 +1,5 @@
 // Run: node --experimental-strip-types --test pc-setup/tests/session-log.test.mjs
-// Uses a fake `claude` (tests/fake-bin) and a fake server. POSIX only (the fake claude is a
-// shebang script); the Windows spawn path is untested.
+// Uses a fake `claude` (tests/fake-bin) and a fake server, on Windows and on Linux/Mac.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -45,8 +44,9 @@ async function endSession(home, transcript, extraEnv = {}) {
   return { r, log };
 }
 
-// The fake `claude` in fake-bin/ is a shell script, which Windows cannot run as a program.
-const FAKE_CLAUDE_SKIP = process.platform === "win32" && "needs the fake claude shell script (Linux or Mac only)";
+// The fake `claude` is a Node script. On Windows, fake-bin/claude.cmd starts it, the same way
+// cmd.exe finds the real claude.cmd, so these tests run through the real Windows spawn path too.
+const FAKE_CLAUDE_SKIP = false;
 
 test("writes a redacted, short log in the background; claude runs once (loop guard works); no upload by default", { skip: FAKE_CLAUDE_SKIP }, async () => {
   const srv = await startFakeServer();

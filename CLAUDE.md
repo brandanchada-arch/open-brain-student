@@ -20,7 +20,7 @@ explain changes in plain language.
 | `enrich-thought` | DB webhook on insert: embedding → graph links → chunks (long thoughts) → tags/category/summary |
 | `generate-embedding` | Text → 1536-number embedding via OpenRouter (`openai/text-embedding-3-small`). Returns `{embedding: null}` on failure, never throws |
 | `call-llm` | LLM gateway; provider picked by `LLM_PROVIDER` secret. Nothing else talks to an AI company directly |
-| `open-brain-mcp` | MCP server for Claude Desktop (`get_core`, `add_session_log`, `search_thoughts`, `list_recent`, `add_thought`, plus library tools `search_library`, `list_library`, `get_library_entry`, `library_quiz_material`, and `save_to_library`, which saves a page Claude has read into the library with the door check; `add_thought` is only for the owner's own thoughts). Auth: `MCP_ACCESS_KEY` in the `Authorization: Bearer` header |
+| `open-brain-mcp` | MCP server for Claude Desktop (`get_core`, `add_session_log`, `search_thoughts`, `list_recent`, `add_thought`, plus library tools `search_library`, `list_library`, `get_library_entry`, `library_quiz_material`, and `save_to_library`, which saves a page Claude has read into the library with the door check; `add_thought` is only for the owner's own thoughts; on the overnight branch also `get_page` and `brain_health`). Auth: `MCP_ACCESS_KEY` in the `Authorization: Bearer` header |
 | `search-brain` | The app's Search tab. Identifies the caller from their login token. `{library: true, course, doc_type, topic}` searches the library instead. `{ask: true}` = Ask mode (`_shared/ask.ts`) |
 | `edit-thought` | Edit a thought / mark it outdated. User from the login token; old text goes to `thought_versions`; rebuilds embedding, links, chunks and tags via `_shared/enrich.ts` + `_shared/thought-edit.ts` |
 | `review-proposal` | Brain → Review: approve / reject / undo brain page changes. User from the login token. Normal deploy (token check on) |
@@ -31,6 +31,8 @@ explain changes in plain language.
 | `telegram-bot` | Capture from Telegram, stamped with `OWNER_USER_ID`, plus `/ask`. Locked: needs Telegram's `TELEGRAM_WEBHOOK_SECRET` header and a sender matching `TELEGRAM_OWNER_ID`. Deploy with `--no-verify-jwt`. After changing the secret, POST `{"setup": true}` with that header to re-register the webhook |
 | `weekly-digest` | Sunday summary via pg_cron of non-archived thoughts, saved to the **library** (doc_type `digest`). `config.toml` keeps `verify_jwt = false`, so it checks callers itself |
 | `daily-quiz`, `gap-questions` | Study tab Quiz / Gaps. No pg_cron job or Brain Calendar code calls them (checked 2026-11-03); they still send to Telegram when called with the service role key. `daily-quiz` takes `{course, topic}` for the Library tab's "Quiz me". Deploy with `--no-verify-jwt` |
+| `weekly-news-filter` (overnight branch, not live) | Saturday list of 5 videos from public feeds, saved to the library (doc_type `news-list`) with one push. Channels live in `news_channels`, never in this repo. Code stops AI calls at an estimated $1 a month. Normal deploy (token check on) |
+| `save-suggestion` (overnight branch, not live) | The PC's Friday script saves one suggestion to the library (doc_type `suggestion`) with one push. Auth: `MCP_ACCESS_KEY`. Not an MCP tool on purpose. Deploy with `--no-verify-jwt` |
 | `backfill-embeddings`, `backfill-links`, `backfill-chunks` | One-time catch-up jobs, run in a PowerShell loop until `remaining` is 0. `backfill-chunks {"library": true}` repairs library embeddings/chunks |
 | `_shared/chunking.ts`, `_shared/thought-chunks.ts` | Chunking logic copied from open-brain-express; `generateEmbedding` adapted to call our own `generate-embedding` |
 | `_shared/library.ts` | Save a library entry, embed + chunk it, pick random quiz notes |
@@ -60,7 +62,7 @@ explain changes in plain language.
 - Schema changes: run with `npx supabase db query --linked --yes -f <file>.sql` from this folder (or the SQL Editor); `migration.sql` is only the original Level 1 table. Read-only queries: use `--read-only` instead of `--yes`.
 
 ## Checking before you ship
-`npm install` once, then `npm run check`: JS syntax, Deno type-check of every function, all tests, SQL load test. Needs Node 22.18+. Nothing real is contacted. Deno isn't installed on the PC; set `DENO_BIN` to a `deno.exe` or the type-check shows `skip`. 4 session-log tests skip on Windows (they need a shell script) and 3 browser tests skip without Playwright. They run in the cloud.
+`npm install` once, then `npm run check`: JS syntax, Deno type-check of every function, all tests, SQL load test. Needs Node 22.18+. Nothing real is contacted. Deno isn't installed on the PC; set `DENO_BIN` to a `deno.exe` or the type-check shows `skip`. 3 browser tests skip without Playwright. They run in the cloud.
 
 ## Deploying
 Always from this folder (running from `C:\Users\josep` fails with "Entrypoint path does not exist"):
@@ -78,9 +80,10 @@ Anything importing `_shared/` must be redeployed when the file it imports change
 - **Master is protected on GitHub**: changes go through a pull request. `gh` isn't installed, so push a branch and merge it on github.com.
 
 ## Not checked yet
-- **Telegram `/recent` and `/ask`**: the new `telegram-bot` is live and refuses strangers, but nobody tested these two commands after the deploy.
+- **Overnight build (branch `overnight/finish-brain`)**: health check, news filter, topic page drafts, Friday suggestions and small fixes are tested with fakes only and are not live. Steps are in `NEEDS-BRANDAN.md`. **Real YouTube feeds are unproven.** The `enrich-thought` lock needs one real test note right after it's deployed.
+- **Telegram `/recent` and `/ask` on a real phone**: both pass with the real bot code and fakes (`tests/ask-edit-check/telegram-commands.test.mjs`), but nobody has tried them through real Telegram.
 - **Sunday digest**: the fixed `weekly-digest` passed the token check on a real job run, but that run stopped at "fewer than 5 thoughts", so the first full digest on the new code is the Sunday after go-live.
-- **Session log hook**: needs one real Claude Code session of 3+ messages ended with `/exit`, then exactly one new file in `claude-session-logs`.
+- **Session log hook**: its tests now pass on Windows with a fake `claude`, but it still needs one real Claude Code session of 3+ messages ended with `/exit`, then exactly one new file in `claude-session-logs`.
 - **`save_to_library` on a real page**: tested with fakes only. Needs Claude Desktop restarted or the connector reconnected to see it.
 - **`voice` skill**: needs 3-5 writing samples in `%USERPROFILE%\.claude\skills\voice\samples.md`. Never in the repo copy.
 
