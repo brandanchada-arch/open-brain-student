@@ -33,9 +33,12 @@ Decisions made while drafting, with nobody available to ask. Each picks the safe
   before that column existed) are therefore NOT exported. Safer than exporting rows we can't prove
   are his. Links are cheap to rebuild with `backfill-links`.
 - `thought_links` are returned regardless of `include_archived` (they're only ids + scores).
-- Not exported: `library_links`, `thought_chunks`, `library_chunks`. Chunks are rebuilt by
-  `backfill-chunks`. `library_links` (takeaway → source) is NOT rebuildable; adding it is a small
-  follow-up worth doing (filter through the owner's library ids).
+- Not exported: `thought_chunks`, `library_chunks`. Chunks are rebuilt by `backfill-chunks`.
+- `library_links` (takeaway → source, NOT rebuildable) ARE exported since `cloud/go-live-fixes` (fix 4).
+  The table has no `id` or `user_id`, so it is paged through the owner's library ids
+  (`library` filtered by `user_id`, ordered by id; cursor = last library id), and each page returns every
+  link to those entries. Against an older export-brain the weekly export still writes the backup,
+  with `library_links: null`, and logs a warning.
 - Missing `MCP_ACCESS_KEY` or `OWNER_USER_ID` secret → refuse (500), never "open by default".
   Key compared in constant time.
 

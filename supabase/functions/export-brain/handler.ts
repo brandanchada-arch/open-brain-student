@@ -6,12 +6,19 @@
 // weekly export script can save a copy. READ-ONLY: it only ever runs SELECTs.
 //
 // Request:  POST  Authorization: Bearer <MCP_ACCESS_KEY>
-//   { "table": "thoughts" | "library" | "thought_links",
+//   { "table": "thoughts" | "library" | "thought_links" | "library_links",
 //     "include_archived": false,   // thoughts only; true = also archived ones (for the backup)
 //     "after": "<id>",             // cursor from the previous page's next_after; omit for page 1
 //     "limit": 25 }                // rows per page, 1–50 (default 25)
 // Response: { table, rows, count, next_after, done }
 //   Keep calling with after = next_after until done is true.
+//
+// library_links (takeaway thought -> the library entry it came from) has no id and no user_id,
+// and a backfill can't rebuild it. It is paged by the OWNER's library entries instead: each
+// page takes the next `limit` of the owner's library ids (filtered by user_id, ordered by id)
+// and returns every link pointing at those entries. next_after is the last library id, so
+// all links of one entry always arrive together and none are skipped. A page can have 0 rows
+// and still not be done (entries with no links).
 
 // deno-lint-ignore no-explicit-any
 type Db = any;
@@ -22,7 +29,7 @@ export type ExportDeps = {
   ownerId: string | null;    // OWNER_USER_ID secret
 };
 
-export const TABLES = ["thoughts", "library", "thought_links"] as const;
+export const TABLES = ["thoughts", "library", "thought_links", "library_links"] as const;
 export const DEFAULT_LIMIT = 25;
 export const MAX_LIMIT = 50;
 // Some thoughts are 100,000+ characters. A page stops early once its text passes
@@ -95,6 +102,25 @@ export async function handleExport(req: Request, deps: ExportDeps): Promise<Resp
   if (after !== null && !UUID.test(after)) return json(400, { error: "after must be an id from next_after" });
 
   try {
+    if (table === "library_links") {
+      // Same owner filter as the table's own RLS policy: the link's library entry is the owner's.
+      let lq = deps.db.from("library").select("id").eq("user_id", deps.ownerId);
+      if (after) lq = lq.gt("id", after);
+      const { data: libs, error: lErr } = await lq.order("id", { ascending: true }).limit(limit);
+      if (lErr) throw new Error(lErr.message ?? String(lErr));
+      const ids = (libs ?? []).map((r: Record<string, unknown>) => String(r.id));
+      let links: Record<string, unknown>[] = [];
+      if (ids.length) {
+        const { data, error } = await deps.db.from("library_links").select("*").in("library_id", ids)
+          .order("library_id", { ascending: true }).order("thought_id", { ascending: true });
+        if (error) throw new Error(error.message ?? String(error));
+        links = data ?? [];
+      }
+      const rows = links.map(cleanRow);
+      const done = ids.length < limit;
+      return json(200, { table, rows, count: rows.length, next_after: done ? null : ids[ids.length - 1], done });
+    }
+
     // Pages are ordered by id, so "after" is a simple, stable cursor: rows added
     // during an export can't shift a page and make another row be skipped.
     let q = deps.db.from(table).select("*").eq("user_id", deps.ownerId);

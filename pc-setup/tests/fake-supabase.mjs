@@ -1,5 +1,5 @@
 // A tiny in-memory stand-in for the supabase-js client: only what export-brain uses
-// (from().select().eq().is().gt().order().limit()). It records every method name so a
+// (from().select().eq().is().gt().in().order().limit()). It records every method name so a
 // test can prove the function never writes.
 export function fakeDb(tables) {
   const calls = [];
@@ -14,6 +14,7 @@ export function fakeDb(tables) {
         eq(col, val) { calls.push(`eq:${col}`); filters.push((r) => r[col] === val); return q; },
         is(col, val) { calls.push(`is:${col}`); filters.push((r) => (r[col] ?? null) === val); return q; },
         gt(col, val) { calls.push(`gt:${col}`); filters.push((r) => String(r[col]) > String(val)); return q; },
+        in(col, vals) { calls.push(`in:${col}`); filters.push((r) => vals.includes(r[col])); return q; },
         order(col) { order = col; return q; },
         limit(n) { limit = n; return q; },
         then(resolve) {

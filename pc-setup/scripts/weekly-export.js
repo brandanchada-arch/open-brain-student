@@ -10,7 +10,7 @@
 //   thoughts\<id>-<short-title>.md   one per non-archived thought, YAML front matter for Obsidian
 //   library\<id>-<short-title>.md    one per library entry
 //   backups\open-brain-backup-YYYY-MM-DD.json   everything needed to restore, incl. archived
-//                                                thoughts and thought_links; no embeddings
+//                                                thoughts, thought_links and library_links; no embeddings
 //   export-log.txt                   what each run did
 //   .last-export.json                which week was last completed
 //
@@ -213,7 +213,7 @@ async function run(argv = process.argv.slice(2)) {
   }
 
   if (args.check) {
-    for (const table of ["thoughts", "library", "thought_links"]) {
+    for (const table of ["thoughts", "library", "thought_links", "library_links"]) {
       const rows = await fetchAll(table, {}, say, { onePage: true });
       say(`OK ${table}: first page has ${rows.length} rows`);
     }
@@ -250,9 +250,20 @@ async function run(argv = process.argv.slice(2)) {
   const allThoughts = await fetchAll("thoughts", { include_archived: true }, log);
   const library = await fetchAll("library", {}, log);
   const links = await fetchAll("thought_links", {}, log);
+  // Takeaway -> source links. A backfill can't rebuild these, so they belong in the backup.
+  // An export-brain deployed before library_links existed answers "table must be one of":
+  // then the backup still runs, without them, and the log says so.
+  let libraryLinks = null;
+  try {
+    libraryLinks = await fetchAll("library_links", {}, log);
+  } catch (err) {
+    if (!/table must be one of/.test(String(err && err.message))) throw err;
+    log("WARNING: library_links were NOT backed up: export-brain is an older version. Redeploy export-brain.");
+  }
   const thoughts = allThoughts.filter((t) => !t.archived_at);
   log(`Downloaded ${allThoughts.length} thoughts (${allThoughts.length - thoughts.length} archived), ` +
-      `${library.length} library entries, ${links.length} links.`);
+      `${library.length} library entries, ${links.length} links` +
+      (libraryLinks ? `, ${libraryLinks.length} library links.` : ", no library links."));
 
   // 2. Backup JSON (never overwrites an earlier backup).
   let backupName = `open-brain-backup-${localDate()}.json`;
@@ -265,10 +276,12 @@ async function run(argv = process.argv.slice(2)) {
     version: 1,
     exported_at: new Date().toISOString(),
     note: "Embeddings are not included; the backfill-embeddings / backfill-chunks / backfill-links jobs rebuild them. user_id is not included; restore with your OWNER_USER_ID.",
-    counts: { thoughts: allThoughts.length, archived_thoughts: allThoughts.length - thoughts.length, library: library.length, thought_links: links.length },
+    counts: { thoughts: allThoughts.length, archived_thoughts: allThoughts.length - thoughts.length, library: library.length, thought_links: links.length,
+      library_links: libraryLinks ? libraryLinks.length : null },
     thoughts: allThoughts,
     library,
     thought_links: links,
+    library_links: libraryLinks, // null = not included (older export-brain)
   };
   const backupPath = path.join(outDir, "backups", backupName);
   fs.writeFileSync(`${backupPath}.tmp-${process.pid}`, JSON.stringify(backup, null, 1), "utf8");

@@ -150,7 +150,7 @@ Needs item 3 deployed first.
 ```powershell
 node "$env:USERPROFILE\.open-brain\scripts\weekly-export.js" --check
 ```
-Should print `OK thoughts`, `OK library`, `OK thought_links`, `Connection works`. Then the real run:
+Should print `OK thoughts`, `OK library`, `OK thought_links`, `OK library_links`, `Connection works`. Then the real run:
 ```powershell
 node "$env:USERPROFILE\.open-brain\scripts\weekly-export.js"
 ```
