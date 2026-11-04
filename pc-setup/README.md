@@ -4,7 +4,7 @@ Files for Brandan's Windows PC, drafted in a cloud session **without any live ac
 Nothing here has been installed or run on Windows yet. A later session on the PC reviews
 and installs them, following the steps below in order.
 
-Status: items 1–2 (skills, voice skill) drafted. More items are added as they are finished.
+Status: items 1–3 (skills, voice skill, export-brain function) drafted. More items are added as they are finished.
 
 ## 1. Skills: exam-prep, job-application, case-study
 
@@ -46,3 +46,25 @@ it has no samples. After adding them, ask again; it should draft and say what it
 **Undo:** delete `%USERPROFILE%\.claude\skills\voice` (copy your samples somewhere first if you want them).
 
 See `NOTES.md` for the decisions made while drafting.
+
+## 3. export-brain function (Supabase)
+
+**What:** a read-only function the weekly export (item 4) calls, so your PC never needs the
+all-powerful service role key. It accepts your existing `MCP_ACCESS_KEY`, only returns **your**
+rows (`OWNER_USER_ID`), a small page at a time, and never returns embeddings.
+
+**Install** (PowerShell, from this repo folder — deploying from your home folder fails):
+```powershell
+npx supabase functions deploy export-brain --no-verify-jwt --project-ref <your-project-ref>
+```
+No new secrets are needed: it uses `MCP_ACCESS_KEY` and `OWNER_USER_ID`, which already exist.
+
+**Test:**
+- Locally (any computer with Node): `node --experimental-strip-types --test pc-setup/tests/export-brain.test.mjs` → 6 passing.
+- Live: the item 4 script with `--check` (see below) asks for one page and prints counts only.
+- A wrong key must be refused: in PowerShell,
+  `Invoke-RestMethod -Method Post -Uri https://<your-project-ref>.supabase.co/functions/v1/export-brain -Headers @{Authorization="Bearer wrong"} -Body '{"table":"thoughts"}' -ContentType application/json`
+  should fail with **401**.
+
+**Undo:** Supabase dashboard → Edge Functions → export-brain → Delete (or `npx supabase functions delete export-brain --project-ref <your-project-ref>`).
+Nothing else depends on it except the weekly export.
