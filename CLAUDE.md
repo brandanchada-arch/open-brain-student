@@ -72,12 +72,17 @@ The root `package.json` did not break `npm:` imports on deploy (tested with CLI 
 Anything importing `_shared/` must be redeployed when the file it imports changes (`enrich-thought`, `edit-thought`, `search-brain`, `telegram-bot`, `backfill-chunks`,
 `capture-url`, `capture-youtube`, `weekly-digest`, `weekly-condenser`, `save-library`, `daily-quiz`, `gap-questions`, `open-brain-mcp`).
 
-## Not done yet (optional, Brandan's call)
-- **Sunday condenser schedule**: `supabase/sql/2026-11-03-core-memory.sql` section 8 is commented out. It needs the service role key in Vault. Then test-run the job once. Until then, `weekly-condenser` only runs by hand.
-- **PC setup**: follow `pc-setup/README.md` (hooks, session logs, weekly backup). Merge into `settings.json`, never replace it. Skipped so far, so there are no PC backups or session logs yet.
-- **Protect master on GitHub**: Settings → Branches: require a pull request and block force pushes. `.claude/settings.json` only asks before a push; it can be got around.
+## Running on a schedule and on the PC
+- **Sunday condenser**: pg_cron job `weekly-brain-condenser`, `0 16 * * 0`, an hour after the digest. Uses Vault secret `service_role_key`, like the digest. Writes proposals only.
+- **PC setup** (`pc-setup/README.md`; installed copies live in `%USERPROFILE%\.open-brain`, re-copy the scripts after changing them): skills in `%USERPROFILE%\.claude\skills`; settings and the MCP key in `.open-brain\.env`; backups in `%USERPROFILE%\open-brain-export`; Windows task `Open Brain weekly export`; SessionStart and SessionEnd hooks in `%USERPROFILE%\.claude\settings.json`; session logs in `%USERPROFILE%\claude-session-logs`, with `SESSION_LOG_UPLOAD=off`.
+- **Master is protected on GitHub**: changes go through a pull request. `gh` isn't installed, so push a branch and merge it on github.com.
+
+## Not checked yet
 - **Telegram `/recent` and `/ask`**: the new `telegram-bot` is live and refuses strangers, but nobody tested these two commands after the deploy.
 - **Sunday digest**: the fixed `weekly-digest` passed the token check on a real job run, but that run stopped at "fewer than 5 thoughts", so the first full digest on the new code is the Sunday after go-live.
+- **Session log hook**: needs one real Claude Code session of 3+ messages ended with `/exit`, then exactly one new file in `claude-session-logs`.
+- **`save_to_library` on a real page**: tested with fakes only. Needs Claude Desktop restarted or the connector reconnected to see it.
+- **`voice` skill**: needs 3-5 writing samples in `%USERPROFILE%\.claude\skills\voice\samples.md`. Never in the repo copy.
 
 ## Gotchas learned the hard way
 - **Reading a JWT's `role` proves nothing.** Functions with `verify_jwt = false` / `--no-verify-jwt` must check the token themselves (`_shared/service-caller.ts`).

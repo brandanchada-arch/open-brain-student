@@ -46,3 +46,10 @@ One line each: date, decision, why.
 - Functions import supabase-js two ways (`esm.sh` and `npm:`). Tidy up someday.
 - Every repo file is served publicly by Vercel, including `tests/`, `pc-setup/` and `package.json`. None hold keys or real user ids.
 - Re-running a digest on another day adds a new entry: the title holds the dates, so "same title updates" only applies to the same dates.
+
+## After go-live (2026-11-03)
+
+- 2026-11-03: `save_to_library` MCP tool added, because Claude reading a page is easier for Brandan than pasting links. Owner comes from `OWNER_USER_ID`, never the arguments; it never writes to `thoughts`; door check and indexing use the same path as the capture functions; re-saving a URL updates that entry.
+- 2026-11-03: Sunday condenser reuses the existing Vault secret `service_role_key`, so nobody handled a key. Test run read 9 notes and wrote 3 first-draft proposals (core, job-search, mega) for Brandan to review.
+- 2026-11-03: `MCP_ACCESS_KEY` printed into a Claude session's log during PC setup, because a masking filter only hid values of 16+ characters. Replacing it was offered and recommended (it's short, and it opens all notes over the internet). Brandan chose to keep it.
+- 2026-11-03: Scheduled task and Claude settings hooks were installed by a script Brandan ran himself, because Claude Code's safety check blocked Claude from doing them.

@@ -11,3 +11,5 @@
 - **Cloud sessions run on Linux, so "all tests pass" there doesn't mean they pass on this PC.** 34 tests failed here at first. `await import(path)`, `URL.pathname` and symlinks only worked on Linux. Use `pathToFileURL`, `fileURLToPath` and `symlinkSync(..., 'junction')`. (2026-11-03)
 - **`bc_brain_status()` and other locked functions fail under `db query --read-only`** with "permission denied". That's the lock working, not a bug. (2026-11-03)
 - **A report's claim about what code does still needs checking against the code.** The rehearsal said a same-week digest re-run updates the entry, but the title holds the dates. Our real run stopped earlier ("only 4 thoughts"), so a 200 alone proved only that it got past the token check: read the reply too. (2026-11-03)
+- **Ctrl+V at a hidden PowerShell prompt can enter one control character instead of pasting.** A single `*` means the key didn't go in, and every check after it fails. Read keys from a file or the clipboard, and validate them. (2026-11-03)
+- **Ask for the actual PASS/FAIL lines.** "done pass" hid four failed key checks until the output was pasted later. (2026-11-03)
