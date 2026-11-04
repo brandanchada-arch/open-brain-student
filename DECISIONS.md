@@ -26,3 +26,23 @@ One line each: date, decision, why.
 ## Telegram lock (2026-11-03)
 
 - 2026-11-03: telegram-bot had no sender or webhook check, so anyone reaching it could read and add thoughts. It now requires TELEGRAM_WEBHOOK_SECRET and a sender matching TELEGRAM_OWNER_ID, and refuses everything if either is missing. Wrong secret gets 401 (Telegram retries, nothing lost); wrong sender gets a silent 200. TELEGRAM_OWNER_ID was copied from Brain Calendar's planner_chat_id.
+
+## Go-live of the cloud builds (2026-11-03)
+
+- 2026-11-03: Core memory: pages change only through proposals you approve (Brain → Review). The condenser writes proposals, never pages. Sensitive proposals need a second "are you sure?". Every approved change can be undone, and History can only grow (database trigger). Claude reads only "Current" through `get_core`.
+- 2026-11-03: Ask answers only from your notes, cites [T1]/[L1], lists all sources if none are cited, and says it won't guess when notes don't cover it. No matches = no AI call.
+- 2026-11-03: Edits clear the embedding, summary chunks and semantic links in the same transaction as the text change, so the backfills repair a failed rebuild. Exact duplicate text is refused and fully undone.
+- 2026-11-03: Outdated means half score in search, never hidden or deleted. Marking outdated keeps old links but adds no new ones.
+- 2026-11-03: Door check never blocks a save. If its AI double-check fails, it flags (a false warning costs nothing). Ask leaves flagged entries out, and leaves the whole library out if the flag lookup fails.
+- 2026-11-03: Service caller check: exact service key, or a `service_role` token Supabase Auth accepts. Auth is asked because the Vault token's exact value can't be seen, and it fails closed. `weekly-digest` keeps `verify_jwt = false` so the Sunday job can't break at the gateway; the code check closes the hole. Tested on the real job: it got through.
+- 2026-11-03: Session-log summarizer has no fallback to a plain `claude -p`: if the locked-down run fails, nothing is written. A plain run would have all tools and MCP servers while reading transcripts that can hold outside text.
+- 2026-11-03: Took this live from separate git worktrees (`ob-golive`, `ob-master`), not by switching the main folder's branch, which held an uncommitted file. Before deploying, confirmed the 10 live functions being replaced matched master, so redeploying from master is a true undo.
+- 2026-11-03: Merged straight to master with a merge commit rather than a pull request: `gh` isn't installed here and the branch had already been previewed. Brandan approved. Telegram `/recent` and `/ask` were left untested by his choice; the Sunday condenser schedule, PC setup and master protection were left for later (see `CLAUDE.md`).
+
+### Left for later
+- `open-brain-mcp` `list_recent` could show "(outdated)"; `search_library` could show the door-check flag.
+- `weekly-digest` and `backfill-links` still include outdated notes. Add `.is("outdated_at", null)` if unwanted.
+- `enrich-thought` has no caller check (`verify_jwt = false`). Anyone who knows a thought's random id could make it re-embed or re-tag that thought. Hard to exploit; worth locking one day.
+- Functions import supabase-js two ways (`esm.sh` and `npm:`). Tidy up someday.
+- Every repo file is served publicly by Vercel, including `tests/`, `pc-setup/` and `package.json`. None hold keys or real user ids.
+- Re-running a digest on another day adds a new entry: the title holds the dates, so "same title updates" only applies to the same dates.

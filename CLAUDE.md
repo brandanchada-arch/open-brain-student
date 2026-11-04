@@ -20,16 +20,24 @@ explain changes in plain language.
 | `enrich-thought` | DB webhook on insert: embedding → graph links → chunks (long thoughts) → tags/category/summary |
 | `generate-embedding` | Text → 1536-number embedding via OpenRouter (`openai/text-embedding-3-small`). Returns `{embedding: null}` on failure, never throws |
 | `call-llm` | LLM gateway; provider picked by `LLM_PROVIDER` secret. Nothing else talks to an AI company directly |
-| `open-brain-mcp` | MCP server for Claude Desktop (`search_thoughts`, `list_recent`, `add_thought`, plus library tools `search_library`, `list_library`, `get_library_entry`, `library_quiz_material`). Auth: `MCP_ACCESS_KEY` in the `Authorization: Bearer` header |
-| `search-brain` | The app's Search tab. Identifies the caller from their login token. `{library: true, course, doc_type, topic}` searches the library instead |
-| `capture-url`, `capture-youtube` | Save an article / YouTube transcript to the **library** (doc_type `article` / `transcript`), with embedding + chunks |
-| `save-library` | The app's PDF upload and pasted transcripts → library (embedding + chunks in the background) |
-| `telegram-bot` | Capture from Telegram, stamped with `OWNER_USER_ID`. Locked: needs Telegram's `TELEGRAM_WEBHOOK_SECRET` header and a sender matching `TELEGRAM_OWNER_ID`. Deploy with `--no-verify-jwt`. After changing the secret, POST `{"setup": true}` with that header to re-register the webhook |
-| `weekly-digest` | Sunday summary via pg_cron of non-archived thoughts, saved to the **library** (doc_type `digest`) |
-| `daily-quiz`, `gap-questions` | Study tab Quiz / Gaps (also Telegram via the scheduler). `daily-quiz` takes `{course, topic}` for the Library tab's "Quiz me". Deploy with `--no-verify-jwt` |
+| `open-brain-mcp` | MCP server for Claude Desktop (`get_core`, `add_session_log`, `search_thoughts`, `list_recent`, `add_thought`, plus library tools `search_library`, `list_library`, `get_library_entry`, `library_quiz_material`). Auth: `MCP_ACCESS_KEY` in the `Authorization: Bearer` header |
+| `search-brain` | The app's Search tab. Identifies the caller from their login token. `{library: true, course, doc_type, topic}` searches the library instead. `{ask: true}` = Ask mode (`_shared/ask.ts`) |
+| `edit-thought` | Edit a thought / mark it outdated. User from the login token; old text goes to `thought_versions`; rebuilds embedding, links, chunks and tags via `_shared/enrich.ts` + `_shared/thought-edit.ts` |
+| `review-proposal` | Brain → Review: approve / reject / undo brain page changes. User from the login token. Normal deploy (token check on) |
+| `weekly-condenser` | Reads the week's notes and writes **proposals** only, never pages. **Never deploy with `--no-verify-jwt`, never add it to `config.toml` with `verify_jwt = false`** |
+| `export-brain` | Read-only export for the PC backup, including `library_links`. Auth: `MCP_ACCESS_KEY`. Deploy with `--no-verify-jwt` |
+| `capture-url`, `capture-youtube` | Save an article / YouTube transcript to the **library** (doc_type `article` / `transcript`), with embedding + chunks + door check |
+| `save-library` | The app's PDF upload and pasted transcripts → library (embedding + chunks in the background, door check) |
+| `telegram-bot` | Capture from Telegram, stamped with `OWNER_USER_ID`, plus `/ask`. Locked: needs Telegram's `TELEGRAM_WEBHOOK_SECRET` header and a sender matching `TELEGRAM_OWNER_ID`. Deploy with `--no-verify-jwt`. After changing the secret, POST `{"setup": true}` with that header to re-register the webhook |
+| `weekly-digest` | Sunday summary via pg_cron of non-archived thoughts, saved to the **library** (doc_type `digest`). `config.toml` keeps `verify_jwt = false`, so it checks callers itself |
+| `daily-quiz`, `gap-questions` | Study tab Quiz / Gaps. No pg_cron job or Brain Calendar code calls them (checked 2026-11-03); they still send to Telegram when called with the service role key. `daily-quiz` takes `{course, topic}` for the Library tab's "Quiz me". Deploy with `--no-verify-jwt` |
 | `backfill-embeddings`, `backfill-links`, `backfill-chunks` | One-time catch-up jobs, run in a PowerShell loop until `remaining` is 0. `backfill-chunks {"library": true}` repairs library embeddings/chunks |
 | `_shared/chunking.ts`, `_shared/thought-chunks.ts` | Chunking logic copied from open-brain-express; `generateEmbedding` adapted to call our own `generate-embedding` |
 | `_shared/library.ts` | Save a library entry, embed + chunk it, pick random quiz notes |
+| `_shared/service-caller.ts` | `isServiceCaller` for scheduler-only paths: the exact `SUPABASE_SERVICE_ROLE_KEY`, or a token Supabase Auth accepts as admin. Never decode a token's role without checking it |
+| `_shared/ask.ts`, `_shared/enrich.ts`, `_shared/thought-edit.ts` | Ask mode; enrichment shared by `enrich-thought` and edits; the rebuild after an edit |
+| `_shared/door-check.ts` | Flags library text that tries to give an AI orders. Never blocks a save. Ask and the condenser leave flagged entries out |
+| `_shared/core-memory.ts` | `get_core` and `add_session_log` logic |
 
 ## Database objects that matter
 - `thoughts` (RLS on; `user_id`, `content`, `embedding`, `metadata`, `content_tsv`)
@@ -45,18 +53,33 @@ explain changes in plain language.
 - **Archived thoughts**: `thoughts.archived_at` + `thoughts.library_id`. 78 thoughts were moved on 2026-10-22 and archived,
   never deleted. A RESTRICTIVE policy hides them from signed-in users; every service-role query on `thoughts` must add
   `archived_at is null` itself (search_thoughts, find_links_for_thought, brain_graph, MCP, digest, quiz, gaps, backfills do).
-- Schema changes: run with `npx supabase db query --linked -f <file>.sql` from this folder (or the SQL Editor); `migration.sql` is only the original Level 1 table.
+- **Core memory** (2026-11-03, `supabase/sql/2026-11-03-core-memory.sql`): `brain_pages` (slugs `core`, `job-search`, `courses`, `mega`; `current_text`, `history_text`, which can only grow), `brain_page_versions` (undo), `brain_proposals`, `session_logs` (service role only). `approve_brain_proposal`, `reject_brain_proposal`, `undo_brain_page_change` are service role only. The browser can read pages, versions and proposals but not write them.
+- **Edits and outdated notes** (2026-11-03, `supabase/sql/2026-11-03-ask-edit-check.sql`): `thoughts.outdated_at`, `thoughts.replaced_by`, `thought_versions` (owner read only), `save_thought_edit(...)` (service role only). Outdated notes get half score in `search_thoughts` and are skipped by `find_links_for_thought`, quiz and gaps. Never hidden from search, never deleted.
+- **Door check**: `library.metadata.door_check = {flagged, reasons, checked_at}`. `search_library` doesn't return `metadata`, so Ask looks the flag up separately and leaves the whole library out if that lookup fails.
+- Schema changes: run with `npx supabase db query --linked --yes -f <file>.sql` from this folder (or the SQL Editor); `migration.sql` is only the original Level 1 table. Read-only queries: use `--read-only` instead of `--yes`.
+
+## Checking before you ship
+`npm install` once, then `npm run check`: JS syntax, Deno type-check of every function, all tests, SQL load test. Needs Node 22.18+. Nothing real is contacted. Deno isn't installed on the PC; set `DENO_BIN` to a `deno.exe` or the type-check shows `skip`. 4 session-log tests skip on Windows (they need a shell script) and 3 browser tests skip without Playwright. They run in the cloud.
 
 ## Deploying
 Always from this folder (running from `C:\Users\josep` fails with "Entrypoint path does not exist"):
 ```
-npx supabase functions deploy <name> --project-ref zqbjxbdborfahsomluye
+npx supabase functions deploy <name> --project-ref zqbjxbdborfahsomluye --yes
 ```
-`open-brain-mcp` needs `--no-verify-jwt`. Docker "not running" warnings are harmless.
-Anything importing `_shared/` must be redeployed when `_shared/` changes (`enrich-thought`, `backfill-chunks`,
-`capture-url`, `capture-youtube`, `weekly-digest`, `save-library`, `daily-quiz`, `open-brain-mcp`).
+`--yes` is required when Claude runs it (agent mode). `open-brain-mcp`, `telegram-bot`, `daily-quiz`, `gap-questions` and `export-brain` need `--no-verify-jwt`. Docker "not running" warnings are harmless.
+The root `package.json` did not break `npm:` imports on deploy (tested with CLI 3.0.0, 2026-11-03).
+Anything importing `_shared/` must be redeployed when the file it imports changes (`enrich-thought`, `edit-thought`, `search-brain`, `telegram-bot`, `backfill-chunks`,
+`capture-url`, `capture-youtube`, `weekly-digest`, `weekly-condenser`, `save-library`, `daily-quiz`, `gap-questions`, `open-brain-mcp`).
+
+## Not done yet (optional, Brandan's call)
+- **Sunday condenser schedule**: `supabase/sql/2026-11-03-core-memory.sql` section 8 is commented out. It needs the service role key in Vault. Then test-run the job once. Until then, `weekly-condenser` only runs by hand.
+- **PC setup**: follow `pc-setup/README.md` (hooks, session logs, weekly backup). Merge into `settings.json`, never replace it. Skipped so far, so there are no PC backups or session logs yet.
+- **Protect master on GitHub**: Settings → Branches: require a pull request and block force pushes. `.claude/settings.json` only asks before a push; it can be got around.
+- **Telegram `/recent` and `/ask`**: the new `telegram-bot` is live and refuses strangers, but nobody tested these two commands after the deploy.
+- **Sunday digest**: the fixed `weekly-digest` passed the token check on a real job run, but that run stopped at "fewer than 5 thoughts", so the first full digest on the new code is the Sunday after go-live.
 
 ## Gotchas learned the hard way
+- **Reading a JWT's `role` proves nothing.** Functions with `verify_jwt = false` / `--no-verify-jwt` must check the token themselves (`_shared/service-caller.ts`).
 - **Changing a SQL function's parameters**: drop every existing overload first, then `create`.
   `create or replace` with a new parameter list makes a second overload and every call fails
   with "function ... is not unique".

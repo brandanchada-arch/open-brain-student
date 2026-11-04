@@ -8,3 +8,6 @@
 
 - A function deployed with --no-verify-jwt is open to the whole internet: it must check the caller itself. telegram-bot ran for weeks with no check. (2026-11-03)
 - In a script that deploys then tests, stop at the first failure. A failed deploy meant the test ran against the old, unlocked bot. (2026-11-03)
+- **Cloud sessions run on Linux, so "all tests pass" there doesn't mean they pass on this PC.** 34 tests failed here at first. `await import(path)`, `URL.pathname` and symlinks only worked on Linux. Use `pathToFileURL`, `fileURLToPath` and `symlinkSync(..., 'junction')`. (2026-11-03)
+- **`bc_brain_status()` and other locked functions fail under `db query --read-only`** with "permission denied". That's the lock working, not a bug. (2026-11-03)
+- **A report's claim about what code does still needs checking against the code.** The rehearsal said a same-week digest re-run updates the entry, but the title holds the dates. Our real run stopped earlier ("only 4 thoughts"), so a 200 alone proved only that it got past the token check: read the reply too. (2026-11-03)
