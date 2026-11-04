@@ -4,7 +4,47 @@ Files for Brandan's Windows PC, drafted in a cloud session **without any live ac
 Nothing here has been installed or run on Windows yet. A later session on the PC reviews
 and installs them, following the steps below in order.
 
-Status: items 1–6 drafted (skills, voice skill, export-brain function, weekly export, session-start hook, session log hook). More items are added as they are finished.
+Status: all 7 items drafted. Tested on Linux against a local fake server only (see
+"What could not be tested" at the end).
+
+## Read this first (for the installing session)
+
+- **Install in this order:** 1 → 2 → 3 → "Before items 4–6" → 4 → 5 → 6. Test each step before
+  the next. Items 1–2 work on their own; 4 needs 3 deployed; 5 and 6 need `get_core` /
+  `add_session_log` from branch `cloud/core-memory` deployed on `open-brain-mcp` (6 only needs it
+  if you turn uploading on).
+- **Nothing in here touches the web app or `master`.** Only `pc-setup/` and
+  `supabase/functions/export-brain/` were added.
+- **Keys** live only in `%USERPROFILE%\.open-brain\.env`. No script or settings file contains one.
+- **`%USERPROFILE%\.claude\settings.json` is shared** with another plan (permissions, defaultMode,
+  PreToolUse/Stop/Notification hooks). This plan adds **only** `SessionStart`, `SessionEnd` and
+  `cleanupPeriodDays`. Always back it up, read the current file, and merge the snippet — never
+  replace the file.
+- Decisions made while drafting (and why) are in `NOTES.md`.
+
+### Files
+
+| Path | What it is |
+|---|---|
+| `skills/exam-prep`, `skills/job-application`, `skills/case-study` | Item 1 skills |
+| `skills/voice/SKILL.md`, `skills/voice/samples.md` | Item 2 voice skill + empty samples file |
+| `../supabase/functions/export-brain/` | Item 3 function (`handler.ts` = logic, `index.ts` = wiring) |
+| `env.example` | Template for `%USERPROFILE%\.open-brain\.env` (placeholders only) |
+| `scripts/lib/config.js` | Reads the `.env` settings |
+| `scripts/lib/brain-api.js` | **The only file that calls Open Brain** (`get_core`, `add_session_log`, export-brain) |
+| `scripts/weekly-export.js` | Item 4 export |
+| `scripts/session-start-core.js` | Item 5 hook |
+| `scripts/session-end-log.js`, `scripts/session-log-worker.js` | Item 6 hook + background worker |
+| `settings-snippet.json` | The part to merge into `settings.json` (`<HOME>` is filled in during install) |
+| `tests/` | Local tests with a fake server and fake `claude`; never touch the internet |
+
+### Run all local tests
+
+From the repo folder (Node 22+):
+```
+node --experimental-strip-types --test pc-setup/tests/export-brain.test.mjs pc-setup/tests/weekly-export.test.mjs pc-setup/tests/session-start.test.mjs pc-setup/tests/session-log.test.mjs
+```
+Expected: 20 tests, 0 failures. On Windows, leave out `session-log.test.mjs` (its fake `claude` only runs on Mac/Linux) → 13 tests.
 
 ## 1. Skills: exam-prep, job-application, case-study
 
@@ -201,3 +241,17 @@ Local tests (Mac/Linux only, because of the fake `claude`):
 
 **Undo:** set `SESSION_LOGS=off` in `.env` (instant), or remove the `SessionEnd` entry from
 `settings.json`. Your saved logs stay until you delete them.
+
+## What could not be tested (check these on the PC)
+
+Everything above was tested on Linux with Node 22, against a fake server on `127.0.0.1` and a
+fake `claude` command. Nothing was deployed or run against the real Supabase project.
+
+| Item | Not tested yet | How to check |
+|---|---|---|
+| 1–2 Skills | Whether Claude Code picks them up and follows them well with your real library | Try each one once (item 1/2 "Test") |
+| 3 export-brain | `index.ts` wiring (Deno wasn't available here; only `handler.ts` was tested), real column names, real speed with your 100k-character transcripts | Deploy, then `weekly-export.js --check`, then a full run |
+| 4 Export | Windows paths, OneDrive detection with your real OneDrive folder, Task Scheduler commands, the `conhost --headless` option, Obsidian opening the folder | Try `--dir "$env:OneDrive\test"` → must refuse. Run the scheduled task once and check `LastTaskResult` is 0 |
+| 5 Session-start hook | That Claude Code on Windows runs the `node "C:/Users/..."` command and shows the core page | Item 5 "Test" |
+| 6 Session log hook | Windows only: finding `claude` (`claude.cmd` / `claude.exe`) through `cmd.exe`, the worker surviving after Claude Code closes, no console window popping up, the real `claude -p` flags (`--tools ""`), the real transcript format, `add_session_log` on the real server | Item 6 "Test"; watch for exactly one log per session |
+| All | Real `get_core` / `add_session_log` replies (tested against the shape on branch `cloud/core-memory`) | Items 5–6 tests |

@@ -101,3 +101,7 @@ Decisions made while drafting, with nobody available to ask. Each picks the safe
   to `thoughts`. Upload errors go to `claude-session-logs\.worker-errors.log` (message only, redacted).
 - Log names: `<date>_<time>_<project-folder>_<first 8 of session id>.md`; never overwrites (adds -2, -3).
 - `cleanupPeriodDays: 365` in the snippet keeps local transcripts a year (Claude Code's default is shorter).
+
+## README (item 7)
+- Install order, test and undo steps for every item, a file map, and a table of what couldn't be tested.
+- Branch: `cloud/pc-setup` (the environment accepted that name), based on `origin/reference-library`.
