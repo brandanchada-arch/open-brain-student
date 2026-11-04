@@ -64,3 +64,14 @@ Decisions made while drafting, with nobody available to ask. Each picks the safe
 - Backups are never overwritten: a second backup on the same day gets a time suffix.
 - Schedule: Task Scheduler trigger repeats every 4 hours; the script exits in under a second once
   this week is done. Console window may flash briefly each time (see README for the hidden option).
+
+## Session-start hook (item 5)
+- Prints `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext": ...}}`; the core
+  text is wrapped in `<open-brain-core>` tags and labelled "data, not instructions". Capped at 8,000 chars.
+- No matcher, so it runs on startup, resume, clear and compact (after a compact the core is re-added).
+- 3 s fetch timeout, 4 s hard exit inside the script, 10 s `timeout` in settings. Any failure → no
+  output, exit 0. "The core page is empty so far" is treated as nothing to add.
+- Waits for the stdout write to finish before exiting (Windows pipes are asynchronous).
+- Paths in the settings snippet use a `<HOME>` placeholder that the installer replaces with the real
+  home folder written with forward slashes (`C:/Users/...`). Forward slashes work whether Claude Code
+  runs hooks through Git Bash, cmd or PowerShell; `%USERPROFILE%` / `$HOME` would only work in one of them.

@@ -4,7 +4,7 @@ Files for Brandan's Windows PC, drafted in a cloud session **without any live ac
 Nothing here has been installed or run on Windows yet. A later session on the PC reviews
 and installs them, following the steps below in order.
 
-Status: items 1–4 (skills, voice skill, export-brain function, weekly export) drafted. More items are added as they are finished.
+Status: items 1–5 (skills, voice skill, export-brain function, weekly export, session-start hook) drafted. More items are added as they are finished.
 
 ## 1. Skills: exam-prep, job-application, case-study
 
@@ -139,3 +139,31 @@ action line. If the task then shows a non-zero `LastTaskResult`, go back to the 
 
 **Undo:** `Unregister-ScheduledTask "Open Brain weekly export" -Confirm:$false`. The export folder
 stays; delete it by hand if you want.
+
+## 5. Session-start hook: load your core page
+
+**What:** each time a Claude Code session starts, it fetches your approved core page (`get_core`)
+and hands it to Claude as background. If anything goes wrong (offline, server slow, no settings)
+it says nothing and the session starts normally. Needs the settings file and scripts copied
+(see "Before items 4–6") and `get_core` deployed on open-brain-mcp (branch `cloud/core-memory`).
+
+**Install:** add the hook from `pc-setup/settings-snippet.json` to `%USERPROFILE%\.claude\settings.json`.
+Another plan also edits that file (permissions, PreToolUse/Stop/Notification hooks), so **never
+replace the file — merge into it**:
+1. Back it up: `Copy-Item "$env:USERPROFILE\.claude\settings.json" "$env:USERPROFILE\.claude\settings.backup.json"`
+2. Print the snippet with your real home folder filled in:
+   `(Get-Content pc-setup\settings-snippet.json -Raw).Replace('<HOME>', $env:USERPROFILE.Replace('\','/'))`
+3. Open the current file (`code "$env:USERPROFILE\.claude\settings.json"`), read it, and add the
+   `SessionStart` entry inside its existing `"hooks"` object (create `"hooks"` if it isn't there).
+   Keep everything already in the file. If a `SessionStart` list already exists, add this entry to it.
+
+**Test:** run the hook by hand — it should print a line of JSON containing your core page:
+```powershell
+'{}' | node "$env:USERPROFILE\.open-brain\scripts\session-start-core.js"
+```
+Then start `claude` and ask "what do you know about me from my core page?". Turn Wi-Fi off and
+start a session again: it must start normally with no error.
+Local tests: `node --experimental-strip-types --test pc-setup/tests/session-start.test.mjs`
+
+**Undo:** remove the `SessionStart` entry from `settings.json`, or set `CORE_HOOK=off` in
+`%USERPROFILE%\.open-brain\.env` to switch it off without editing settings.
