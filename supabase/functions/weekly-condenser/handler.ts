@@ -140,7 +140,11 @@ export async function runCondenser(deps: CondenserDeps) {
         const text = `${title} (${labels})${summary ? `: ${summary}` : ""}`.slice(0, CONDENSER_LIMITS.bootstrapPerItem);
         extra.push({ ref: `BL${i + 1}`, kind: "library", id: l.id, date, text, label: `Library: ${title.slice(0, 80)}` });
       });
-    bootstrapNotes = formatItems(extra, CONDENSER_LIMITS.bootstrapTotal);
+    // The library gets up to half the room, so many older thoughts can't crowd it out.
+    // Thoughts get whatever it leaves.
+    const shelfNotes = formatItems(extra.filter((e) => e.kind === "library"), CONDENSER_LIMITS.bootstrapTotal / 2);
+    bootstrapNotes = shelfNotes +
+      formatItems(extra.filter((e) => e.kind !== "library"), CONDENSER_LIMITS.bootstrapTotal - shelfNotes.length);
     // Only the summaries that fit in the prompt can be cited as sources.
     items.push(...extra.filter((e) => bootstrapNotes.includes(`[${e.ref}]`)));
   }

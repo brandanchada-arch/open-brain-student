@@ -1,6 +1,6 @@
 # Overnight progress
 
-STATUS: RUNNING
+STATUS: ALL DONE
 
 Resume session took over at 2026-11-04 00:51 (main session idle for 53+ minutes). Other wake-ups: stand down.
 
@@ -17,11 +17,14 @@ Read `OVERNIGHT-BRIEF.md` for the rules and order. If you're resuming, carry on 
 - Item 6: small fixes committed. The import cleanup is its own commit.
 - Item 7: Telegram and session-log tests committed. The session-log tests now run on Windows through a small `.cmd` shim, instead of Git Bash.
 
+- Fresh check of Items 4, 6 and 7 passed, except one real bug in Item 4 (library crowded out of first drafts), now fixed with a test that fails without the fix.
+- Item 8: `MORNING-REPORT.md` written.
+
 ## In progress
-- Fresh check of Items 4, 6 and 7, then the morning report.
+- Nothing. The 7:05 AM task still reads the push log and updates the report.
 
 ## Next
-- Item 8, and the 7:05 AM push log read.
+- See `MORNING-REPORT.md`.
 
 ## Decisions made along the way
 - Brandan's mid-night instruction: don't ask; make the best guess, log it, get it done. Brain may be read for context, never written.

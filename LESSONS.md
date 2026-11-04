@@ -15,4 +15,5 @@
 - **The `enrich-thought` webhook sends its token with no "Bearer".** You can learn a trigger's header form safely with regex yes/no queries that never return the definition: `supabase/sql/checks/enrich-webhook-check.sql`. (2026-11-04)
 - **A scan for private names before each commit catches what a rule alone doesn't.** A channel id nearly went into `NEEDS-BRANDAN.md` in this public repo while writing a helpful test link. (2026-11-04)
 - **New Library doc types can leak into older readers.** The Sunday condenser reads every recent Library row, so outside video titles would have reached brain page proposals. When adding a doc type, check every reader of `library`. (2026-11-04)
+- **When a prompt joins several sources and then trims to a total, the later source gets starved.** One fixture row of each kind can't show it. Test with realistic volume and give each source its own room. (2026-11-04)
 - **Ask for the actual PASS/FAIL lines.** "done pass" hid four failed key checks until the output was pasted later. (2026-11-03)

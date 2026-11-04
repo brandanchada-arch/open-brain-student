@@ -60,6 +60,23 @@ test('an empty topic page gets a first draft from older notes and library, as a 
   assert.match(llm.calls[0], /These pages are empty: courses\./);
 });
 
+test('many older thoughts cannot crowd the library out of a first draft', async () => {
+  const many = Array.from({ length: 120 }, (_, i) => ({
+    id: `t-${i}`, user_id: ME, content: 'x', summary: `Older made-up summary ${i} `.repeat(12), created_at: days(40 + i), archived_at: null, outdated_at: null,
+  }));
+  const db = fakeDb(world({ thoughts: many }));
+  const llm = llmAnswer((prompt) => JSON.stringify({ proposals: [
+    { target_slug: 'courses', proposed_text: '- FIN-400: valuation.', reason: 'First draft', sources: [refOf(prompt, 'Valuation lecture')], sensitive: false },
+  ] }));
+  const r = await runCondenser({ db, ownerId: ME, callLlm: llm, now: NOW });
+  assert.match(llm.calls[0], /Valuation lecture/);
+  assert.match(llm.calls[0], /Older made-up summary 0/, 'thoughts still get the room left over');
+  assert.equal(r.written, 1, 'and the library entry can be cited');
+  assert.deepEqual(db.data.brain_proposals[0].source_ids.map((s) => s.id), ['l-ok']);
+  const summaries = llm.calls[0].slice(llm.calls[0].indexOf('<<<SUMMARIES'), llm.calls[0].indexOf('SUMMARIES>>>'));
+  assert.ok(summaries.length <= 20_100, `the total stays near its limit (${summaries.length})`);
+});
+
 test('nothing writes to a page: the text stays as it was', async () => {
   const db = fakeDb(world());
   await runCondenser({ db, ownerId: ME, callLlm: llmAnswer(draftFor('courses')), now: NOW });
