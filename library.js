@@ -11,7 +11,7 @@
   const READER_PAGE = 6000;   // characters shown at a time in the reader
   const TYPE_NAMES = {
     'class-notes': 'Class notes', transcript: 'Transcript', digest: 'Digest', reference: 'Reference',
-    'sim-data': 'Sim data', 'personal-doc': 'Personal doc', article: 'Article', 'news-list': 'News list',
+    'sim-data': 'Sim data', 'personal-doc': 'Personal doc', article: 'Article', 'news-list': 'News list', suggestion: 'Suggestion',
   };
   const typeName = (t) => TYPE_NAMES[t] || t || 'Other';
 

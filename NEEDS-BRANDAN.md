@@ -68,6 +68,35 @@ drop table if exists public.news_channels;
 ```
 Then redeploy `weekly-condenser` from `master`. Lists already saved stay in the Library.
 
+## Friday suggestions: going live
+
+From `C:\Users\josep\open-brain-student`, once merged:
+```bash
+npx supabase functions deploy save-suggestion --no-verify-jwt --project-ref zqbjxbdborfahsomluye --yes
+```
+```bash
+npx supabase functions deploy weekly-condenser --project-ref zqbjxbdborfahsomluye --yes
+```
+Then read `pc-setup\install-friday-suggestion.ps1` and run it yourself. Claude can't, because scheduled tasks may be refused:
+```bash
+powershell -ExecutionPolicy Bypass -File pc-setup\install-friday-suggestion.ps1
+```
+**To try it once:** run this any time after Friday 2 PM. It runs at most once per week, so running it by hand uses up that week.
+```bash
+node "$env:USERPROFILE\.open-brain\scripts\friday-suggestion.js"
+```
+**Not tested for real:** the actual `claude -p` run with `--model haiku --max-turns 1`, and the Windows task.
+
+**Decided for you:** a week needs at least 3 notes or logs. If the AI's answer mentions study or job topics, code throws it away, even on a false match. The push always uses the same short text.
+
+**Switch off:** add `FRIDAY_SUGGESTION=off` to `%USERPROFILE%\.open-brain\.env`.
+
+**Undo:**
+```powershell
+Unregister-ScheduledTask "Open Brain Friday suggestion" -Confirm:$false
+```
+Then remove the `save-suggestion` function in the Supabase dashboard and redeploy `weekly-condenser` from `master`.
+
 ## Living topic pages: going live
 
 Redeploy two functions. No SQL needed:

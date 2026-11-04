@@ -62,6 +62,7 @@ function getConfig() {
     sessionLogUpload: isOn(env.SESSION_LOG_UPLOAD, false), // OFF unless explicitly turned on
     sessionLogProject: env.SESSION_LOG_PROJECT || "",
     sessionLogDir: path.join(os.homedir(), "claude-session-logs"),
+    fridaySuggestion: isOn(env.FRIDAY_SUGGESTION, true),
   };
 }
 

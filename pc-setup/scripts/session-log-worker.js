@@ -226,4 +226,4 @@ if (require.main === module) {
   );
 }
 
-module.exports = { main, redact, readTranscript, condense, parseSummary };
+module.exports = { main, redact, readTranscript, condense, parseSummary, runClaude };

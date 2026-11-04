@@ -73,6 +73,7 @@ export async function runCondenser(deps: CondenserDeps) {
     .eq("user_id", ownerId)
     .neq("doc_type", "digest") // digests are AI summaries of the same thoughts
     .neq("doc_type", "news-list") // video lists from outside feeds, not what you've been doing
+    .neq("doc_type", "suggestion") // the AI's own Friday suggestions, not facts about you
     .gte("created_at", since)
     .order("created_at", { ascending: true })
     .limit(40);
@@ -124,6 +125,7 @@ export async function runCondenser(deps: CondenserDeps) {
       .eq("user_id", ownerId)
       .neq("doc_type", "digest")
       .neq("doc_type", "news-list")
+      .neq("doc_type", "suggestion")
       .order("created_at", { ascending: false })
       .limit(300);
     if (shelfErr) fail("Could not read library summaries", shelfErr);
