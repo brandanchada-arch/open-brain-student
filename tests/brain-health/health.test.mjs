@@ -88,6 +88,12 @@ test('scheduled jobs: overdue, failed and switched off are problems; never-run i
   assert.equal(h.ok, false);
 });
 
+test('no false alarm: one failed tick, or a job created switched off that never ran', async () => {
+  await addJob('brain-calendar-tick', ago(1 / 1440), 'failed');
+  await addJob('weekly-news-filter', null, 'succeeded', false);
+  assert.deepEqual(codes(await health()), []);
+});
+
 test('a job on time, right at its limit, is not a false alarm', async () => {
   await addJob('keep-brain-awake', ago(4));
   await addJob('weekly-brain-digest', ago(7.9));

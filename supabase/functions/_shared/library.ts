@@ -177,7 +177,7 @@ export async function pickQuizMaterial(
   const total = opts.totalChars ?? 15000
 
   let q = admin.from('library').select('id, title, course, topic, doc_type, created_at')
-    .eq('user_id', userId).neq('doc_type', 'digest')
+    .eq('user_id', userId).neq('doc_type', 'digest').neq('doc_type', 'news-list')
   if (opts.course) q = q.ilike('course', escapeLike(opts.course))
   if (opts.topic) q = q.ilike('topic', `%${escapeLike(opts.topic)}%`)
   if (opts.docType) q = q.ilike('doc_type', escapeLike(opts.docType))

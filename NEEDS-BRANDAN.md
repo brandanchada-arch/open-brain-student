@@ -2,6 +2,72 @@
 
 Things that need you, or an action that was off limits overnight. Newest items go under their topic.
 
+## Push the overnight commits to GitHub (do this first)
+
+The resume session's `git push` needed a person's approval, and nobody was there to give it. So its commits are
+saved on this PC but aren't on GitHub yet. Nothing was forced or worked around. Run both:
+```bash
+git -C C:\Users\josep\open-brain-student push origin overnight/finish-brain
+```
+```bash
+git -C C:\Users\josep\bc-overnight push origin overnight/finish-brain
+```
+
+## News filter: real YouTube feeds are unproven
+
+One look-up at the public feeds returned 404 and 500 for all 5 channels tried, even though the channel pages gave ids.
+A follow-up test was refused by the safety check because it tried several browser identities, so it never ran and
+wasn't tried another way. (That first look-up also sent a browser-style identity, so it isn't a clean test either.)
+**So nobody knows yet if these feeds work.** The test link is at the top of `C:\Users\josep\ai-notes\news-channels.sql`
+(kept out of this public repo). Open it in your own browser; a page of XML means it's fine.
+
+If it doesn't work, stop here: the list can't be made from feeds, and every Saturday you'd get a "couldn't read" push.
+
+## News filter: going live
+
+Do these after that feed check, from `C:\Users\josep\open-brain-student`, once the branch is merged.
+
+1. **Check the channels.** Open `C:\Users\josep\ai-notes\news-channels.sql`. The fourth creator is a guess.
+2. Add the tables, then the channels:
+```bash
+npx supabase db query --linked --yes -f supabase/sql/2026-11-04-news-filter.sql
+```
+```bash
+npx supabase db query --linked --yes -f C:\Users\josep\ai-notes\news-channels.sql
+```
+3. Deploy the new function, plus the condenser so it skips news lists (normal deploys, token check on):
+```bash
+npx supabase functions deploy weekly-news-filter --project-ref zqbjxbdborfahsomluye --yes
+```
+```bash
+npx supabase functions deploy weekly-condenser --project-ref zqbjxbdborfahsomluye --yes
+```
+4. Anything else importing `_shared/library.ts` should be redeployed too, so quizzes skip news lists: `daily-quiz`, `open-brain-mcp` (`--no-verify-jwt` on both).
+5. Schedule it for Saturdays at 7:30 AM Arizona time (14:30 UTC). Run this in the SQL Editor. It uses the same Vault secret as the Sunday jobs:
+```sql
+select cron.schedule('weekly-news-filter', '30 14 * * 6', $cron$
+  select net.http_post(
+    url     := 'https://zqbjxbdborfahsomluye.supabase.co/functions/v1/weekly-news-filter',
+    headers := jsonb_build_object('Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key')),
+    body    := '{}'::jsonb,
+    timeout_milliseconds := 150000);
+$cron$);
+```
+
+**Cost:** one AI call a week. Code stops AI calls at an estimated $1 a month, using deliberately high prices. Over the cap you still get the list, just without reasons.
+
+**Decided for you:** Shorts are left out. The list is judged against your core page, which is empty until you approve a draft, and the list says so while it is.
+
+**Undo:**
+```sql
+select cron.unschedule('weekly-news-filter');
+drop table if exists public.news_listed;
+drop table if exists public.news_runs;
+drop table if exists public.news_channels;
+```
+Then redeploy `weekly-condenser` from `master`. Lists already saved stay in the Library.
+
 ## Brain health check: going live
 
 Nothing is live yet. Merge both `overnight/finish-brain` branches first, then do these in order from

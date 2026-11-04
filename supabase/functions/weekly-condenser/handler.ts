@@ -72,6 +72,7 @@ export async function runCondenser(deps: CondenserDeps) {
     .select("id, title, doc_type, course, topic, summary, content, metadata, created_at")
     .eq("user_id", ownerId)
     .neq("doc_type", "digest") // digests are AI summaries of the same thoughts
+    .neq("doc_type", "news-list") // video lists from outside feeds, not what you've been doing
     .gte("created_at", since)
     .order("created_at", { ascending: true })
     .limit(40);

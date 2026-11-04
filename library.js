@@ -11,7 +11,7 @@
   const READER_PAGE = 6000;   // characters shown at a time in the reader
   const TYPE_NAMES = {
     'class-notes': 'Class notes', transcript: 'Transcript', digest: 'Digest', reference: 'Reference',
-    'sim-data': 'Sim data', 'personal-doc': 'Personal doc', article: 'Article',
+    'sim-data': 'Sim data', 'personal-doc': 'Personal doc', article: 'Article', 'news-list': 'News list',
   };
   const typeName = (t) => TYPE_NAMES[t] || t || 'Other';
 
@@ -69,7 +69,7 @@
   }
 
   async function loadLibrary(force) {
-    if (!force && entries.length && Date.now() - loadedAt < 60_000) { refreshFilters(); render(); return; }
+    if (!force && entries.length && Date.now() - loadedAt < 60_000) { refreshFilters(); render(); openFromLink(); return; }
     try {
       const { data, error } = await sb.from('library')
         .select('id, title, doc_type, course, topic, created_at')
@@ -85,8 +85,16 @@
     }
     refreshFilters();
     render();
+    openFromLink();
   }
   window.loadLibrary = loadLibrary;
+
+  // A push can open one entry directly ("#library/<id>"; shell.js holds the id).
+  function openFromLink() {
+    const id = window.obLibraryOpen;
+    window.obLibraryOpen = null;
+    if (/^[0-9a-f-]{36}$/i.test(id || '')) openEntry(id);
+  }
 
   // ---------- reader ----------
   async function openEntry(id) {
@@ -104,6 +112,10 @@
     }
   }
 
+  // News lists: makes the video links tappable. Runs on already-escaped text, and only an exact video link matches.
+  const videoLinks = (safe) => safe.replace(/https:\/\/www\.youtube\.com\/watch\?v=[A-Za-z0-9_-]{11}(?![A-Za-z0-9_-])/g,
+    (url) => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
+
   function showPage(e, page) {
     const reader = $('libReader');
     const text = String(e.content || '');
@@ -113,7 +125,7 @@
       <div class="section-title" style="margin:0;"><span class="lib-title">${esc(e.title || 'Untitled')}</span>
         <button class="linkish" type="button" data-lib-close>Close</button></div>
       <div class="thought-meta">${bits}${/^https?:\/\//i.test(e.source_url || '') ? ` · <a href="${esc(e.source_url)}" target="_blank" rel="noopener">source</a>` : ''}</div>
-      <div class="lib-text">${esc(text.slice(0, page * READER_PAGE))}</div>
+      <div class="lib-text">${e.doc_type === 'news-list' ? videoLinks(esc(text.slice(0, page * READER_PAGE))) : esc(text.slice(0, page * READER_PAGE))}</div>
       ${page < pages ? `<button class="secondary" type="button" data-lib-more style="width:100%; margin-top:12px;">Show more (${page} of ${pages})</button>` : ''}`;
     reader._entry = e; reader._page = page;
   }

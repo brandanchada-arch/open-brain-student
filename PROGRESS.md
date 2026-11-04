@@ -9,10 +9,10 @@ Read `OVERNIGHT-BRIEF.md` for the rules and order. If you're resuming, carry on 
 ## Done
 - Interview and brief. Wake-up tasks set and tested.
 - Item 1 (tonight's part): evidence, query and guide in `NEEDS-BRANDAN.md`. The 7:05 AM task writes `PUSH-LOG-RESULT.md`.
-- Item 2: health check built in both repos (fresh review running).
+- Item 2: health check committed on both branches, fresh check passed. Pushes are refused in this unattended run (see `NEEDS-BRANDAN.md`), so commits are local only.
 
 ## In progress
-- Item 3: news filter.
+- Item 3: news filter (function, SQL, tests, app link). Real YouTube feeds are unproven: see `NEEDS-BRANDAN.md`.
 
 ## Next
 - Items 4 to 8, in the brief's order.
@@ -23,3 +23,6 @@ Read `OVERNIGHT-BRIEF.md` for the rules and order. If you're resuming, carry on 
 - Health: "new note" means the last 14 days. Notes under 20 characters or with a category don't count, because enrich-thought skips those on purpose.
 - Health: the health card's data comes through `review-proposal` (a new action), so no new function to deploy.
 - Health: backup counts as finished when export-brain answers the last table (`library_links`) as done.
+- Health: a failed run counts for the weekly-style jobs only, not one failed run of the every-minute calendar job. A switched-off job counts only once it has run. Both came from the fresh check.
+- News: the research covers 3 creators in depth. The interview's fourth wasn't recoverable, so the fourth in the local list is a best guess from the research's leads, marked there for Brandan to check.
+- News: the function identifies itself honestly and never imitates a browser.

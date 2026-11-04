@@ -73,12 +73,16 @@ begin
         when 'weekly-brain-condenser' then 'The Sunday condenser job'
         when 'weekly-news-filter' then 'The Saturday news filter job'
         else 'The Brain Calendar job' end;
-      if not job.active then
+      -- A job that never ran may simply be new, so being off only counts once it has run.
+      -- One failed run of the every-minute job is a hiccup, so the failed check skips that job.
+      if not job.active and job.last_run is not null then
         problems := problems || jsonb_build_object('code', 'job_off:' || job.jobname, 'text', label || ' is switched off.');
+      elsif not job.active then
+        null;
       elsif job.last_run is not null and job.last_run < p_now - limit_for then
         problems := problems || jsonb_build_object('code', 'job_overdue:' || job.jobname,
           'text', label || ' hasn''t run since ' || to_char(job.last_run, 'Mon FMDD') || '.');
-      elsif job.last_status = 'failed' then
+      elsif job.last_status = 'failed' and job.jobname <> 'brain-calendar-tick' then
         problems := problems || jsonb_build_object('code', 'job_failed:' || job.jobname, 'text', label || ' failed on its last run.');
       end if;
     end loop;
