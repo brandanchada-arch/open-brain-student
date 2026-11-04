@@ -68,6 +68,24 @@ drop table if exists public.news_channels;
 ```
 Then redeploy `weekly-condenser` from `master`. Lists already saved stay in the Library.
 
+## Living topic pages: going live
+
+Redeploy two functions. No SQL needed:
+```bash
+npx supabase functions deploy weekly-condenser --project-ref zqbjxbdborfahsomluye --yes
+```
+```bash
+npx supabase functions deploy open-brain-mcp --no-verify-jwt --project-ref zqbjxbdborfahsomluye --yes
+```
+Then restart Claude Desktop or reconnect its connector to see `get_page` and `brain_health`.
+
+**What happens next:** the next Sunday run drafts the empty Courses page as a proposal, unless Courses already has one by then.
+A draft you reject isn't tried again, and later weekly updates still work as normal.
+
+**Waiting for you now in Brain → Review:** 3 first drafts, for Core, Job search and MEGA.
+
+**Undo:** redeploy both from `master`. Nothing else changed.
+
 ## Brain health check: going live
 
 Nothing is live yet. Merge both `overnight/finish-brain` branches first, then do these in order from

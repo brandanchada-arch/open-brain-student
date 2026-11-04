@@ -11,11 +11,14 @@ Read `OVERNIGHT-BRIEF.md` for the rules and order. If you're resuming, carry on 
 - Item 1 (tonight's part): evidence, query and guide in `NEEDS-BRANDAN.md`. The 7:05 AM task writes `PUSH-LOG-RESULT.md`.
 - Item 2: health check committed on both branches, fresh check passed. Pushes are refused in this unattended run (see `NEEDS-BRANDAN.md`), so commits are local only.
 
+- Item 3: news filter committed; fresh check running. Real YouTube feeds are unproven: see `NEEDS-BRANDAN.md`.
+- Item 4: living topic pages committed.
+
 ## In progress
-- Item 3: news filter (function, SQL, tests, app link). Real YouTube feeds are unproven: see `NEEDS-BRANDAN.md`.
+- Item 5: Friday suggestions.
 
 ## Next
-- Items 4 to 8, in the brief's order.
+- Items 6 to 8, in the brief's order, plus the 7:05 AM push log read.
 
 ## Decisions made along the way
 - Brandan's mid-night instruction: don't ask; make the best guess, log it, get it done. Brain may be read for context, never written.
@@ -26,3 +29,5 @@ Read `OVERNIGHT-BRIEF.md` for the rules and order. If you're resuming, carry on 
 - Health: a failed run counts for the weekly-style jobs only, not one failed run of the every-minute calendar job. A switched-off job counts only once it has run. Both came from the fresh check.
 - News: the research covers 3 creators in depth. The interview's fourth wasn't recoverable, so the fourth in the local list is a best guess from the research's leads, marked there for Brandan to check.
 - News: the function identifies itself honestly and never imitates a browser.
+- Pages: "one time" means a page that has never had a proposal. A rejected draft isn't retried. If the AI writes no draft at all, the next Sunday tries again.
+- Pages: first drafts read library titles and labels only, never full text, because some entries are huge.

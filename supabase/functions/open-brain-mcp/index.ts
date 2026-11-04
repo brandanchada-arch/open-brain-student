@@ -11,7 +11,7 @@ import {
   ADD_THOUGHT_DESCRIPTION, LibraryInputError, MAX_CONTENT_CHARS, SAVE_DOC_TYPES, SAVE_TO_LIBRARY_DESCRIPTION, saveToLibrary,
 } from "../_shared/library-mcp.ts";
 import {
-  ADD_SESSION_LOG_DESCRIPTION, addSessionLog, GET_CORE_DESCRIPTION, getCoreText, MCP_INSTRUCTIONS,
+  ADD_SESSION_LOG_DESCRIPTION, addSessionLog, GET_CORE_DESCRIPTION, GET_PAGE_DESCRIPTION, getCoreText, getPageText, MCP_INSTRUCTIONS,
 } from "../_shared/core-memory.ts";
 
 // These come from Supabase automatically — no setup needed.
@@ -53,6 +53,17 @@ const TOOLS = [
     name: "get_core",
     description: GET_CORE_DESCRIPTION,
     inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "get_page",
+    description: GET_PAGE_DESCRIPTION,
+    inputSchema: {
+      type: "object",
+      properties: {
+        slug: { type: "string", enum: ["job-search", "courses", "mega", "core"], description: "Which page to read" },
+      },
+      required: ["slug"],
+    },
   },
   {
     name: "add_session_log",
@@ -449,6 +460,13 @@ Deno.serve(async (req) => {
         }
         if (toolName === "get_core") return textResult(id, await getCoreText(supabase, OWNER_USER_ID));
         return textResult(id, await addSessionLog(supabase, OWNER_USER_ID, args));
+      }
+
+      if (toolName === "get_page") {
+        if (!OWNER_USER_ID) {
+          throw new Error("OWNER_USER_ID is not set in Edge Function secrets");
+        }
+        return textResult(id, await getPageText(supabase, OWNER_USER_ID, args.slug));
       }
 
       if (toolName === "brain_health") {

@@ -12,7 +12,7 @@
 // deno-lint-ignore-file no-explicit-any
 import {
   buildCondenserPrompt, cleanProposals, CONDENSER_LIMITS, CONDENSER_SYSTEM_PROMPT, formatItems,
-  PAGE_SLUGS, PAGE_TITLES, parseLlmJson, type SourceItem, toSourceItems,
+  isDoorFlagged, PAGE_SLUGS, PAGE_TITLES, parseLlmJson, type SourceItem, toSourceItems,
 } from "../_shared/core-memory.ts";
 
 export type CondenserDeps = {
@@ -46,10 +46,10 @@ export async function runCondenser(deps: CondenserDeps) {
   for (const p of pageRows ?? []) pages[p.slug] = p.current_text ?? "";
 
   // 2. Pages that already have a proposal waiting are left alone this week.
-  const { data: pendingRows, error: pendErr } = await db
-    .from("brain_proposals").select("target_slug").eq("user_id", ownerId).eq("status", "pending");
-  if (pendErr) fail("Could not read pending proposals", pendErr);
-  const skipSlugs = [...new Set((pendingRows ?? []).map((r: any) => r.target_slug))] as string[];
+  const { data: proposalRows, error: pendErr } = await db
+    .from("brain_proposals").select("target_slug, status").eq("user_id", ownerId);
+  if (pendErr) fail("Could not read proposals", pendErr);
+  const skipSlugs = [...new Set((proposalRows ?? []).filter((r: any) => r.status === "pending").map((r: any) => r.target_slug))] as string[];
   if (PAGE_SLUGS.every((s) => skipSlugs.includes(s))) {
     return { ok: true, skipped: true, note: "Every page already has a proposal waiting for review." };
   }
@@ -90,10 +90,12 @@ export async function runCondenser(deps: CondenserDeps) {
   const items = toSourceItems(thoughts ?? [], library ?? [], logs ?? []);
   const flaggedSkipped = (library ?? []).length - items.filter((i) => i.kind === "library").length;
 
-  // 4. First run: empty core page and nothing waiting for it -> also read short
-  //    summaries of all active thoughts so there's enough to draft one.
+  // 4. A page's first draft, once only: it's empty and has never had a proposal (a rejected
+  //    draft isn't tried again) -> also read short summaries of older notes and library entries.
+  const proposedBefore = new Set((proposalRows ?? []).map((r: any) => r.target_slug));
+  const bootstrapSlugs = PAGE_SLUGS.filter((s) => !String(pages[s] ?? "").trim() && !proposedBefore.has(s)) as string[];
   let bootstrapNotes = "";
-  if (!String(pages.core ?? "").trim() && !skipSlugs.includes("core")) {
+  if (bootstrapSlugs.length) {
     const { data: all, error: aErr } = await db
       .from("thoughts")
       .select("id, summary, category, created_at")
@@ -114,6 +116,28 @@ export async function runCondenser(deps: CondenserDeps) {
           text: s, label: `${String(t.created_at).slice(0, 10)}: ${s.slice(0, 80)}`, category: t.category ?? null,
         };
       });
+    // Library: titles and labels only, never the full text (some entries are huge).
+    // Flagged entries, digests and news lists stay out.
+    const { data: shelf, error: shelfErr } = await db
+      .from("library")
+      .select("id, title, doc_type, course, topic, summary, metadata, created_at")
+      .eq("user_id", ownerId)
+      .neq("doc_type", "digest")
+      .neq("doc_type", "news-list")
+      .order("created_at", { ascending: false })
+      .limit(300);
+    if (shelfErr) fail("Could not read library summaries", shelfErr);
+    const weekLibrary = new Set(items.filter((i) => i.kind === "library").map((i) => i.id));
+    (shelf ?? [])
+      .filter((l: any) => !isDoorFlagged(l) && !weekLibrary.has(l.id))
+      .forEach((l: any, i: number) => {
+        const labels = [l.doc_type, l.course, l.topic].filter(Boolean).join(", ");
+        const date = String(l.created_at).slice(0, 10);
+        const summary = String(l.summary ?? "").replace(/\s+/g, " ").trim();
+        const title = String(l.title ?? "Untitled").replace(/\s+/g, " ").trim();
+        const text = `${title} (${labels})${summary ? `: ${summary}` : ""}`.slice(0, CONDENSER_LIMITS.bootstrapPerItem);
+        extra.push({ ref: `BL${i + 1}`, kind: "library", id: l.id, date, text, label: `Library: ${title.slice(0, 80)}` });
+      });
     bootstrapNotes = formatItems(extra, CONDENSER_LIMITS.bootstrapTotal);
     // Only the summaries that fit in the prompt can be cited as sources.
     items.push(...extra.filter((e) => bootstrapNotes.includes(`[${e.ref}]`)));
@@ -129,6 +153,7 @@ export async function runCondenser(deps: CondenserDeps) {
     pages, skipSlugs,
     weekNotes: formatItems(items.filter((i) => !i.ref.startsWith("B"))),
     bootstrapNotes: bootstrapNotes || undefined,
+    bootstrapSlugs,
   });
   const answer = await deps.callLlm(CONDENSER_SYSTEM_PROMPT, prompt, MAX_TOKENS);
   const parsed = parseLlmJson(answer, deps.repair);
@@ -136,7 +161,7 @@ export async function runCondenser(deps: CondenserDeps) {
     // Fail safely: write nothing. Next week's run tries again.
     throw new Error("The AI's answer was not usable JSON, so nothing was written");
   }
-  const { proposals, dropped } = cleanProposals(parsed, items, pages, skipSlugs);
+  const { proposals, dropped } = cleanProposals(parsed, items, pages, skipSlugs, bootstrapSlugs);
   if (dropped.length) console.log("weekly-condenser dropped:", dropped.join("; "));
   if (proposals.length === 0) {
     return { ok: true, written: 0, note: "No page needed a change.", dropped, notesRead: weekCount, flaggedSkipped };
