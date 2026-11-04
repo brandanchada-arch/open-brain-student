@@ -75,3 +75,29 @@ Decisions made while drafting, with nobody available to ask. Each picks the safe
 - Paths in the settings snippet use a `<HOME>` placeholder that the installer replaces with the real
   home folder written with forward slashes (`C:/Users/...`). Forward slashes work whether Claude Code
   runs hooks through Git Bash, cmd or PowerShell; `%USERPROFILE%` / `$HOME` would only work in one of them.
+
+## Session log hook (item 6)
+- Two files: `session-end-log.js` (the hook: reads stdin for ≤1.5 s, checks, starts the worker
+  detached with `windowsHide`, exits; 3 s hard exit) and `session-log-worker.js` (does the work).
+- **Loop guard:** env var `OPEN_BRAIN_SESSION_LOG_CHILD=1`, set by the hook on the worker and again by
+  the worker on `claude -p`. Both hooks (start and end) do nothing when it is set. Extra layers: the
+  child runs with `--no-session-persistence` (so it has no transcript to summarize) and from the temp
+  folder. Tested with a fake `claude` that fires the real hook, plus a negative control that strips the
+  guard and shows the loop really happens without it.
+- `claude -p --output-format text --tools "" --no-session-persistence --strict-mcp-config`: no tools,
+  no MCP servers, not saved. If that fails (an older CLI not knowing a flag), it retries once with plain
+  `claude -p`, which still can't ask for permissions in print mode.
+- Only typed messages are summarized: tool calls/results, meta and sidechain (subagent) entries are
+  dropped. Each message capped at 1,500 chars, the whole thing at 60,000 (most recent kept).
+- Skips sessions with fewer than 3 typed prompts or under 1,500 characters of text (and transcripts
+  under 2 KB at the hook stage).
+- Keys are removed twice: from the text sent to `claude -p` and from the summary it returns. Patterns:
+  common key prefixes (sk-, ghp_, github_pat_, sb_secret_, AKIA, xox, AIza), Telegram bot tokens,
+  JWTs, `Bearer ...`, `NAME=value` where the name contains KEY/SECRET/TOKEN/PASSWORD, private-key
+  blocks, and any 32+ char string mixing letters and digits. That last one also hides UUIDs (user ids)
+  and git hashes — on purpose, the safer side.
+- Summary capped at 2,000 chars (add_session_log's limit), title at 120.
+- Upload is `SESSION_LOG_UPLOAD=off` by default and only calls `add_session_log`. Nothing here writes
+  to `thoughts`. Upload errors go to `claude-session-logs\.worker-errors.log` (message only, redacted).
+- Log names: `<date>_<time>_<project-folder>_<first 8 of session id>.md`; never overwrites (adds -2, -3).
+- `cleanupPeriodDays: 365` in the snippet keeps local transcripts a year (Claude Code's default is shorter).

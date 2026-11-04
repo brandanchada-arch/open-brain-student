@@ -4,7 +4,7 @@ Files for Brandan's Windows PC, drafted in a cloud session **without any live ac
 Nothing here has been installed or run on Windows yet. A later session on the PC reviews
 and installs them, following the steps below in order.
 
-Status: items 1–5 (skills, voice skill, export-brain function, weekly export, session-start hook) drafted. More items are added as they are finished.
+Status: items 1–6 drafted (skills, voice skill, export-brain function, weekly export, session-start hook, session log hook). More items are added as they are finished.
 
 ## 1. Skills: exam-prep, job-application, case-study
 
@@ -167,3 +167,37 @@ Local tests: `node --experimental-strip-types --test pc-setup/tests/session-star
 
 **Undo:** remove the `SessionStart` entry from `settings.json`, or set `CORE_HOOK=off` in
 `%USERPROFILE%\.open-brain\.env` to switch it off without editing settings.
+
+## 6. Session log hook: short summaries of each session
+
+**What:** when a Claude Code session ends, a background job asks `claude -p` for a short summary
+(decisions, lessons, next steps) and saves it to `%USERPROFILE%\claude-session-logs`. Full
+transcripts stay where Claude Code keeps them on your PC. Anything that looks like a key is
+removed before summarizing and again after. Very short sessions are skipped. The hook returns
+immediately, so closing Claude Code never waits for it. Summarizing uses your Claude plan, like
+a short `claude -p` question.
+
+**Uploading** summaries to Open Brain (`add_session_log`) is **off** until you turn it on. Read a
+few logs first; if you're happy, set `SESSION_LOG_UPLOAD=on` in `%USERPROFILE%\.open-brain\.env`.
+It never writes to your thoughts.
+
+**Install:** same as item 5 — merge the `SessionEnd` entry and `"cleanupPeriodDays": 365` from
+`pc-setup/settings-snippet.json` into your existing `%USERPROFILE%\.claude\settings.json`
+(back it up first, read it, keep everything else). `cleanupPeriodDays` keeps Claude Code's local
+transcripts for a year instead of deleting them sooner. If the file already has
+`cleanupPeriodDays`, keep the larger number.
+
+**Test:**
+1. Start `claude`, have a short real conversation (at least 3 messages), then type `/exit`.
+2. Within a minute or two a new `.md` file should appear in `%USERPROFILE%\claude-session-logs`.
+   Open it and read it.
+3. A session with just one message should **not** create a log.
+4. Only one log per session: if you ever see several files for one session, set
+   `SESSION_LOGS=off` straight away and report it (that would mean the loop guard failed).
+5. If no log appears, look in `%USERPROFILE%\claude-session-logs\.worker-errors.log`.
+
+Local tests (Mac/Linux only, because of the fake `claude`):
+`node --experimental-strip-types --test pc-setup/tests/session-log.test.mjs`
+
+**Undo:** set `SESSION_LOGS=off` in `.env` (instant), or remove the `SessionEnd` entry from
+`settings.json`. Your saved logs stay until you delete them.
