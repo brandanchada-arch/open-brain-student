@@ -59,6 +59,16 @@ const askDb: AskDb = {
     const data = res.ok ? await res.json().catch(() => []) : [];
     return new Set((Array.isArray(data) ? data : []).map((r: any) => r.id));
   },
+  // Library entries the door check flagged are never sent to the AI (fix 3). An error throws,
+  // and Ask then leaves the whole library out rather than risk sending a flagged entry.
+  flaggedLibraryIds: async (userId, ids) => {
+    if (!ids.length) return new Set<string>();
+    const res = await supabaseRequest(`library?select=id,metadata&user_id=eq.${userId}&id=in.(${ids.join(",")})`);
+    if (!res.ok) throw new Error(`library flag lookup failed: HTTP ${res.status}`);
+    const data = await res.json().catch(() => null);
+    if (!Array.isArray(data)) throw new Error("library flag lookup gave no list");
+    return new Set(data.filter((r: any) => r?.metadata?.door_check?.flagged === true).map((r: any) => r.id));
+  },
 };
 
 Deno.serve(async (req: Request) => {

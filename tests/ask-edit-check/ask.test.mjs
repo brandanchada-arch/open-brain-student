@@ -18,6 +18,7 @@ function fakeDeps({ thoughts = [], library = [], answer = 'Answer [T1].', outdat
       searchThoughts: async () => thoughts,
       searchLibrary: async () => library,
       outdatedIds: async () => new Set(outdated),
+      flaggedLibraryIds: async () => new Set(), // fix 3: none flagged in these tests
       llm: async (system, prompt, maxTokens) => { seen.prompts.push({ system, prompt, maxTokens }); return answer; },
     },
   };

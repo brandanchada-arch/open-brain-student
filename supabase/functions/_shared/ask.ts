@@ -12,6 +12,8 @@
  *
  * Safety: the notes are DATA. The system prompt tells the AI never to follow instructions
  * written inside them. Only short excerpts are sent, never whole long captures.
+ * Library entries the door check flagged (metadata.door_check.flagged = true) are never
+ * sent to the AI, same as the weekly condenser (FIXES-REPORT.md fix 3).
  */
 
 export const ASK_LIMITS = {
@@ -59,10 +61,20 @@ export interface AskDeps {
   searchLibrary: (query: string, embedding: number[] | null, count: number) => Promise<any[]>
   /** Optional: which of these thought ids are marked outdated (needs the 2026-11-03 SQL). */
   outdatedIds?: (ids: string[]) => Promise<Set<string>>
+  /**
+   * Which of these library ids the door check flagged. search_library doesn't return metadata,
+   * so this looks it up. If it's missing or fails, NO library entries are sent (fail safe).
+   */
+  flaggedLibraryIds?: (ids: string[]) => Promise<Set<string>>
   llm: (systemPrompt: string, prompt: string, maxTokens: number) => Promise<string | null>
 }
 
 const clean = (s: unknown) => String(s ?? '').replace(/\s+/g, ' ').trim()
+
+/** Outside content the door check found suspicious (same test as the condenser's isDoorFlagged). */
+export function isDoorFlagged(row: any): boolean {
+  return row?.metadata?.door_check?.flagged === true
+}
 
 /** Short label for a note in the source list. */
 function titleFor(row: any, kind: 'thought' | 'library'): string {
@@ -89,7 +101,8 @@ export function buildContext(
 ): { text: string; sources: AskSource[] } {
   const tagged: { row: any; kind: 'thought' | 'library' }[] = []
   const t = thoughts.slice(0, limits.thoughtResults)
-  const l = library.slice(0, limits.libraryResults)
+  // Flagged library entries are left out before counting, so they don't take a clean entry's place.
+  const l = library.filter((row) => !isDoorFlagged(row)).slice(0, limits.libraryResults)
   for (let i = 0; i < Math.max(t.length, l.length); i++) {
     if (t[i]) tagged.push({ row: t[i], kind: 'thought' })
     if (l[i]) tagged.push({ row: l[i], kind: 'library' })
@@ -146,7 +159,20 @@ export async function askNotes(question: string, deps: AskDeps, limits = ASK_LIM
     outdated = await deps.outdatedIds(thoughts.map((r) => r.id)).catch(() => new Set<string>())
   }
 
-  const ctx = buildContext(thoughts ?? [], library ?? [], outdated, limits)
+  // Leave out library entries the door check flagged. If we can't tell, leave out the library.
+  let libraryRows = (library ?? []).filter((r: any) => !isDoorFlagged(r))
+  if (libraryRows.length) {
+    try {
+      if (!deps.flaggedLibraryIds) throw new Error('no flagged lookup')
+      const flagged = await deps.flaggedLibraryIds(libraryRows.map((r: any) => r.id))
+      libraryRows = libraryRows.filter((r: any) => !flagged.has(r.id))
+    } catch {
+      libraryRows = []
+    }
+  }
+
+  // If nothing is left (e.g. the only match was flagged), this says the notes don't cover it.
+  const ctx = buildContext(thoughts ?? [], libraryRows, outdated, limits)
   if (ctx.sources.length === 0) {
     return { answer: NOT_COVERED_MESSAGE, covered: false, sources: [], considered: 0 }
   }
@@ -205,6 +231,8 @@ export interface AskDb {
   rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: any; error: { message: string } | null }>
   /** Ids (out of `ids`) of the user's thoughts that are marked outdated. */
   outdatedIds: (userId: string, ids: string[]) => Promise<Set<string>>
+  /** Ids (out of `ids`) of the user's library entries the door check flagged. Throw on error. */
+  flaggedLibraryIds: (userId: string, ids: string[]) => Promise<Set<string>>
 }
 
 /** AskDb from a supabase-js service-role client (search-brain). */
@@ -217,6 +245,12 @@ export function askDbFromClient(admin: any): AskDb {
       // Before the 2026-11-03 SQL runs there is no outdated_at column: treat nothing as outdated.
       if (error) return new Set<string>()
       return new Set((data ?? []).map((r: any) => r.id))
+    },
+    flaggedLibraryIds: async (userId, ids) => {
+      if (!ids.length) return new Set<string>()
+      const { data, error } = await admin.from('library').select('id, metadata').eq('user_id', userId).in('id', ids)
+      if (error) throw new Error(`library flag lookup failed: ${error.message}`)
+      return new Set((data ?? []).filter(isDoorFlagged).map((r: any) => r.id))
     },
   }
 }
@@ -260,6 +294,7 @@ export function makeAskDeps(db: AskDb, userId: string, supabaseUrl: string, serv
       return data ?? []
     },
     outdatedIds: (ids) => db.outdatedIds(userId, ids),
+    flaggedLibraryIds: (ids) => db.flaggedLibraryIds(userId, ids),
     llm: async (systemPrompt, prompt, maxTokens) => {
       const { ok, data } = await callFn('call-llm', { systemPrompt, prompt, maxTokens, userId, source })
       return ok && typeof data.text === 'string' ? data.text : null
