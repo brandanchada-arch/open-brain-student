@@ -10,7 +10,7 @@
 // The real work is in handler.ts.
 // ─────────────────────────────────────────────────────────────
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { handleExport } from "./handler.ts";
 
 const db = createClient(

@@ -25,9 +25,9 @@ async function load(env = {}) {
     OWNER_USER_ID: OWNER, BRAIN_OWNER_ID: OWNER, ...env,
   });
   const src = readFileSync(new URL('open-brain-mcp/index.ts', FN), 'utf8')
-    .replaceAll('"https://esm.sh/@supabase/supabase-js@2"', JSON.stringify(FAKE_SB))
+    .replaceAll('"npm:@supabase/supabase-js@2"', JSON.stringify(FAKE_SB))
     .replaceAll('"../_shared/', `"${new URL('_shared/', FN).href}`);
-  assert.ok(!src.includes('esm.sh'), 'supabase-js import was swapped for the fake');
+  assert.ok(!src.includes('npm:@supabase/supabase-js'), 'supabase-js import was swapped for the fake');
   const copy = join(TMP, `open-brain-mcp-${++copies}.ts`);
   writeFileSync(copy, src);
   await import(pathToFileURL(copy).href);

@@ -12,7 +12,7 @@
 // request body, where a browser could put any user id it likes.
 // ============================================================================
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { askDbFromClient, askNotes, makeAskDeps } from "../_shared/ask.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;

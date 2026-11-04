@@ -4,7 +4,7 @@
 //
 // It speaks JSON-RPC 2.0 over HTTP, which is what MCP uses under the hood.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { inBackground, indexLibraryEntry, pickQuizMaterial } from "../_shared/library.ts";
 import { doorCheckViaGateway } from "../_shared/door-check.ts";
 import {
