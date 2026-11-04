@@ -65,7 +65,7 @@ What I **can't** prove: whether `npx supabase functions deploy` builds the same 
 fails, it fails before anything changes on the live function, so trying is safe. Go-live step 4 deploys the new
 `review-proposal` first as the test. If it fails, rename `package.json` while deploying and put it back afterwards.
 
-**P3. (Medium, open, on `master`, outside the four branches) `weekly-digest` accepts a made-up service-role token.**
+**P3. (Medium, on `master`, outside the four branches; fixed on `cloud/go-live-fixes`, fix 1) `weekly-digest` accepts a made-up service-role token.**
 `supabase/config.toml` line 26 has `verify_jwt = false` for `weekly-digest`, so Supabase doesn't check tokens for it.
 Its `isServiceCaller` (`supabase/functions/weekly-digest/index.ts`, around line 89) only *reads* the token's `role`.
 It never checks the signature, and its comment assumes Supabase already did. So anyone can send a made-up token that
@@ -92,11 +92,11 @@ Telegram id. Locations only, values not repeated:
   code used as an example.
 - `pc-setup/skills/voice/samples.md` is a placeholder. Never paste real writing samples into the repo copy.
 
-**P6. (Low, open) Ask sends door-flagged library entries to the AI** (`supabase/functions/_shared/ask.ts`,
+**P6. (Low; fixed on `cloud/go-live-fixes`, fix 3) Ask sends door-flagged library entries to the AI** (`supabase/functions/_shared/ask.ts`,
 `buildContext`). The core-memory condenser skips these entries. The Ask prompt says notes are data, the AI has no
 tools, and the answer only goes to your screen, so the worst case is a misleading answer.
 
-**P7. (Low, open) The weekly PC backup (`export-brain`) leaves out `library_links`** (takeaway → source links).
+**P7. (Low; fixed on `cloud/go-live-fixes`, fix 4) The weekly PC backup (`export-brain`) leaves out `library_links`** (takeaway → source links).
 Unlike chunks and embeddings, a backfill can't rebuild them. The author noted this too.
 
 **P8. (Low, open; can't check here) `save_thought_edit` relies on Supabase giving the service role access by default.**
