@@ -1,6 +1,6 @@
 # Morning report
 
-**Items 2 to 7 of the list are built, tested with fakes and committed. Item 1 waits on the 7:05 AM log read. Nothing is live, and nothing is on GitHub yet from the takeover onward.**
+**Items 1 to 7 of the list are built, tested with fakes and committed. The 7:05 AM log showed why the summary fails, and the fix is ready but not live. Nothing is live, and nothing is on GitHub yet from the takeover onward.**
 
 ## Do these first
 1. **Push the commits.** GitHub pushes needed a person's approval, and nobody was there. Your work is saved on this PC only:
@@ -14,7 +14,33 @@ git -C C:\Users\josep\bc-overnight push origin overnight/finish-brain
 3. **Check the fourth creator** in that same file. I couldn't recover your choice, so it's my guess.
 
 ## The morning summary push
-The 7:05 AM task writes `PUSH-LOG-RESULT.md` and adds the result here. **The cause is still unproven.** Size is only the leading suspect, and no fix was made. That task's own push may also be held for approval, so its commit may be waiting on this PC too.
+**The log gave a reason, and it isn't size.** At 7:00 AM Apple refused the full summary with `400 BadWebPushTopic` (872 bytes). The "Topic" is an optional label on each push, and Apple rejected ours. The short fallback was sent, so you should have had "Morning summary" at 7:00. Details are in `PUSH-LOG-RESULT.md`.
+
+**The fix:** pushes no longer send a Topic at all. It's on the brain-calendar overnight branch, with a test that fails without it, and all 125 Deno and 53 Node tests pass. **It isn't deployed, so summaries keep failing until it is.** The real test is the first 7:00 AM summary after that.
+
+**To make it live:** run these from `C:\Users\josep\bc-overnight`. They ship everything on that branch, including the health watcher, so follow the order in `NEEDS-BRANDAN.md`.
+```bash
+npx supabase functions deploy bc-tick --no-verify-jwt --project-ref zqbjxbdborfahsomluye
+```
+```bash
+npx supabase functions deploy bc-calendar --project-ref zqbjxbdborfahsomluye
+```
+```bash
+npx supabase functions deploy planner-bot --no-verify-jwt --project-ref zqbjxbdborfahsomluye
+```
+
+**What's proven and what isn't:**
+- **Proven by the log:** today's refusal and Apple's stated reason.
+- **Not proven:** why Apple dislikes this Topic. The history fits one idea: summary Topics are 17 characters, a length that can't be valid base64 (the text format these labels use). All 13 summaries marked "push failed" since Oct 22 had that length. Every kind that went out directly by push has a different length (14 or 16), and today's 23-character short summary was sent. Apple doesn't say this is the reason, and the fix works either way.
+- **Also not proven:** that those 13 failed for this same reason, because no reason was logged before today.
+
+**Saving this:** the fix is committed in `bc-overnight` but not pushed. In this repo, the commit needed a person's approval, so `PUSH-LOG-RESULT.md` and this report are saved but not committed. Run these two, in order, before the push commands under "Do these first":
+```bash
+git -C C:\Users\josep\open-brain-student add PUSH-LOG-RESULT.md MORNING-REPORT.md
+```
+```bash
+git -C C:\Users\josep\open-brain-student commit -m "Record the 7:05 AM push log result" -- PUSH-LOG-RESULT.md MORNING-REPORT.md
+```
 
 ## What's finished
 
