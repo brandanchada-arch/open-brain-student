@@ -1,0 +1,27 @@
+{
+  "cleanupPeriodDays": 365,
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"<HOME>/.open-brain/scripts/session-start-core.js\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"<HOME>/.open-brain/scripts/session-end-log.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -18,6 +18,7 @@
 <!-- Pinned version so the offline copy never goes stale or changes under us -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
 <script src="config.js"></script>
+<link rel="stylesheet" href="review.css">
 <style>
   /* ---------- Design C: Capture First ---------- */
   :root {
@@ -293,6 +294,7 @@
     </div>
     <div id="plannerNotes"></div>
     <div id="plannerPush"></div>
+    <div id="plannerSummary"></div>
     <div id="plannerWaiting"></div>
     <div id="plannerSkipped"></div>
     <div id="plannerTimeline"></div>
@@ -464,6 +466,7 @@
     <div class="chips" role="tablist">
       <button class="chip active" data-sub="graph" type="button">Map</button>
       <button class="chip" data-sub="thoughts" type="button">Thoughts</button>
+      <button class="chip" data-sub="review" type="button">Review</button>
     </div>
     <div class="sub active" id="panel-graph">
       <div class="graph-wrap">
@@ -494,6 +497,7 @@
       <div id="recentList"></div>
     </div>
     </div>
+    <div class="sub" id="panel-review"></div>
     <button class="secondary" id="signOutBtn" style="width:100%; margin-top:24px;">Sign out</button>
   </section>
 </div>
@@ -899,5 +903,10 @@ if ('serviceWorker' in navigator) {
 <script src="graph.js"></script>
 <script src="gaps.js"></script>
 <script src="library.js"></script>
+<script src="review.js"></script>
+<link rel="stylesheet" href="ask-edit-check.css">
+<script src="ask.js"></script>
+<script src="edit-thought.js"></script>
+<script src="door-flag.js"></script>
 </body>
 </html>

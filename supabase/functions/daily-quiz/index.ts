@@ -9,6 +9,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { pickQuizMaterial } from "../_shared/library.ts";
+import { isServiceCaller } from "../_shared/service-caller.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -38,19 +39,6 @@ function reply(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...corsHeaders } });
 }
 
-function isServiceCaller(req: Request): boolean {
-  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  if (!token) return false;
-  if (token === SERVICE_ROLE_KEY) return true;
-  try {
-    const part = token.split(".")[1];
-    if (!part) return false;
-    const b64 = part.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(part.length / 4) * 4, "=");
-    return JSON.parse(atob(b64)).role === "service_role";
-  } catch {
-    return false;
-  }
-}
 
 // Telegram HTML mode: escape the three characters it cares about.
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -80,7 +68,7 @@ async function findChatId(admin: any): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return reply({ error: "Use POST" }, 405);
-  const appMode = !isServiceCaller(req);
+  const appMode = !(await isServiceCaller(req));
   if (appMode && !(await isOwnerUser(req))) return reply({ error: "Unauthorized" }, 401);
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const chatId = appMode ? "" : await findChatId(admin);
@@ -110,6 +98,7 @@ Deno.serve(async (req) => {
         .select("content, created_at")
         .eq("user_id", OWNER_USER_ID)
         .is("archived_at", null)
+        .is("outdated_at", null) // notes marked outdated aren't quiz material (needs the 2026-11-03 SQL)
         .gte("created_at", since)
         .or("category.is.null,category.neq.digest")
         .order("created_at", { ascending: false })

@@ -7,6 +7,7 @@
 // Every AI call goes through call-llm.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { isServiceCaller } from "../_shared/service-caller.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -44,21 +45,6 @@ function reply(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...corsHeaders } });
 }
 
-// Same check weekly-digest uses: only master-key callers.
-function isServiceCaller(req: Request): boolean {
-  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  if (!token) return false;
-  if (token === SERVICE_ROLE_KEY) return true;
-  try {
-    const part = token.split(".")[1];
-    if (!part) return false;
-    const b64 = part.replace(/-/g, "+").replace(/_/g, "/")
-      .padEnd(Math.ceil(part.length / 4) * 4, "=");
-    return JSON.parse(atob(b64)).role === "service_role";
-  } catch {
-    return false;
-  }
-}
 
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
@@ -86,7 +72,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return reply({ error: "Use POST" }, 405);
   // Two ways in: the scheduler (service key) sends to Telegram; the app (my login) gets JSON back.
-  const appMode = !isServiceCaller(req);
+  const appMode = !(await isServiceCaller(req));
   if (appMode && !(await isOwnerUser(req))) return reply({ error: "Unauthorized" }, 401);
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const chatId = appMode ? "" : await findChatId(admin);
@@ -100,6 +86,7 @@ Deno.serve(async (req) => {
       .select("content, summary, category, created_at")
       .eq("user_id", OWNER_USER_ID)
       .is("archived_at", null) // moved-to-library thoughts are not part of the brain anymore
+      .is("outdated_at", null) // nor are notes marked outdated (needs the 2026-11-03 SQL)
       .gte("created_at", since)
       .or("category.is.null,category.neq.digest")
       .order("created_at", { ascending: true });

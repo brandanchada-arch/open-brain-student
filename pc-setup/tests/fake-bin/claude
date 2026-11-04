@@ -1,0 +1,37 @@
+#!/usr/bin/env node
+// FAKE `claude` for tests only. Put fake-bin first on PATH.
+// - logs each call (args + whether the loop guard was set) to $FAKE_CLAUDE_LOG
+// - saves the prompt it received to $FAKE_CLAUDE_LOG.prompt
+// - like the real CLI, fires the SessionEnd hook when it finishes ($FAKE_HOOK, transcript
+//   $FAKE_TRANSCRIPT) with its own environment. FAKE_STRIP_GUARD=1 removes the guard first
+//   (negative control: proves the test would catch a loop). Depth capped at 3.
+// - prints a summary containing a fake key; FAKE_LONG=1 prints a very long one;
+//   FAKE_FAIL_STRICT=1 fails when given --tools (tests that there is no unrestricted fallback).
+const fs = require("fs");
+const { spawnSync } = require("child_process");
+const args = process.argv.slice(2);
+let prompt = "";
+try { prompt = fs.readFileSync(0, "utf8"); } catch {}
+const depth = Number(process.env.FAKE_DEPTH || 0);
+fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify({ args, guard: process.env.OPEN_BRAIN_SESSION_LOG_CHILD || null, depth }) + "\n");
+fs.writeFileSync(process.env.FAKE_CLAUDE_LOG + ".prompt", prompt);
+if (process.env.FAKE_FAIL_STRICT === "1" && args.includes("--tools")) { process.stderr.write("unknown option --tools\n"); process.exit(1); }
+
+if (process.env.FAKE_HOOK && depth < 3) {
+  const env = { ...process.env, FAKE_DEPTH: String(depth + 1) };
+  if (process.env.FAKE_STRIP_GUARD === "1") delete env.OPEN_BRAIN_SESSION_LOG_CHILD;
+  spawnSync(process.execPath, [process.env.FAKE_HOOK], {
+    input: JSON.stringify({ session_id: "child-session", transcript_path: process.env.FAKE_TRANSCRIPT, cwd: "/tmp", hook_event_name: "SessionEnd", reason: "other" }),
+    env, timeout: 5000,
+  });
+}
+
+const long = process.env.FAKE_LONG === "1" ? "\n- " + "very long line ".repeat(400) : "";
+process.stdout.write(`TITLE: Set up demo export
+## Decisions
+- Use a local folder, because sync folders are risky. Key was sk-test-LEAKEDLEAKEDLEAKED123456 oops.${long}
+## Lessons
+- MCP_ACCESS_KEY=fake-value-123456 should never be pasted.
+## Next steps
+- None
+`);
