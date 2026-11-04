@@ -143,7 +143,7 @@
   const SCREEN_OF = {
     today: 'today', jobs: 'jobs', capture: 'capture', study: 'study', brain: 'brain',
     voice: 'capture', url: 'capture', youtube: 'capture', pdf: 'capture',
-    gaps: 'study', quiz: 'study', library: 'study', graph: 'brain', map: 'brain', thoughts: 'brain', search: 'brain', recent: 'brain',
+    gaps: 'study', quiz: 'study', library: 'study', graph: 'brain', map: 'brain', thoughts: 'brain', search: 'brain', recent: 'brain', review: 'brain',
   };
   const SUB_ALIAS = { search: 'thoughts', recent: 'thoughts', map: 'graph' };
   const DEFAULT_SUB = { capture: 'voice', study: 'gaps', brain: 'graph' };
@@ -159,6 +159,7 @@
     if (screen === 'study' && sub === 'library' && window.loadLibrary) loadLibrary();
     if (screen === 'brain' && sub === 'graph' && window.obGraph) obGraph.show();
     if (screen === 'brain' && sub === 'thoughts' && !$('searchResults').innerHTML) loadRecent();
+    if (screen === 'brain' && sub === 'review' && window.loadReview) loadReview();
   }
 
   function go(name, opts = {}) {
