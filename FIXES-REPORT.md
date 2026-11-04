@@ -15,7 +15,7 @@ Nothing was pushed to master, no other branch was changed, nothing was deployed,
 |---|---|---|
 | 1 | Forged service tokens (`weekly-digest`, `daily-quiz`, `gap-questions`, `weekly-condenser`) | **done**, commit `67ba821` |
 | 2 | Today page shows the morning summary | **done**, commit `c0d5e58` |
-| 3 | Ask skips door-flagged library entries (P6) | not started |
+| 3 | Ask skips door-flagged library entries (P6) | **done**, commit `6c22c7d` |
 | 4 | Backup keeps `library_links` (P7) | not started |
 
 ---
@@ -139,6 +139,45 @@ I also took a phone-size screenshot with the page's own styles to check it looks
 
 ---
 
+## Fix 3: Ask leaves out library entries the door check flagged (P6)
+
+### What it does, in plain words
+When you save a web page, video or PDF, the "door check" looks for text trying to boss the AI around and, if it
+finds some, marks the entry (`metadata.door_check.flagged = true`). The weekly condenser already ignores those
+entries; Ask didn't. Now Ask doesn't either.
+
+One catch: the library search (`search_library`) doesn't return `metadata`, so Ask can't see the mark in the search
+results. Rather than change the SQL, Ask now asks the database "which of these library entries are flagged?"
+(only your own rows: `user_id` = the signed-in user, or `OWNER_USER_ID` for Telegram) and drops those before
+anything goes to the AI. `buildContext` also drops any row that carries the mark itself, before counting, so a
+flagged entry doesn't take a clean entry's place.
+**Safer choice:** if that lookup fails, Ask leaves the **whole library** out for that question (thoughts are still
+used) instead of risking a flagged entry. If nothing is left, the answer is the normal
+"Your notes don't cover this yet…" and the AI isn't called at all.
+Changed: `supabase/functions/_shared/ask.ts` (used by `search-brain` and `telegram-bot`) and the small database
+helper in `telegram-bot/index.ts`. `tests/ask-edit-check/ask.test.mjs`'s fake now says "nothing flagged" (one line),
+because without the lookup Ask now leaves the library out.
+
+### Tests (`tests/go-live-fixes/ask-flagged.test.mjs`, 8 tests)
+- a flagged entry found by the lookup isn't in the prompt; the clean one is, and is the only source;
+- only flagged matches → "notes don't cover this", AI never called;
+- a row carrying its own flag is dropped by `buildContext`, and flagged rows don't use up the 4 library slots;
+- lookup throws, or isn't provided → library left out, thoughts still used;
+- no library hits → no lookup made;
+- `search-brain`'s lookup reads `library` filtered by `user_id`, reads the flag from `metadata`, and throws on error;
+- the real `telegram-bot` `/ask` with a flagged hit: the lookup URL has `user_id=eq.<owner>`, the AI is never
+  called, and the reply says the notes don't cover it.
+With the old `ask.ts` and `telegram-bot` put back, 7 of these 8 fail.
+`search-brain`, `telegram-bot` and `export-brain` also type-check with Deno when esm.sh is pointed at the npm copy
+of supabase-js (esm.sh can't be reached from here).
+
+### Redeploy for fix 3
+`search-brain` (flags: none) and `telegram-bot` (`--no-verify-jwt`). Both are already in the go-live list (4e, 4h);
+nothing new to add. Extra check after 4e: Ask still answers a question you know is in your notes.
+Undo: as in the list (redeploy from the master copy).
+
+---
+
 ## Changes to REHEARSAL-REPORT.md's go-live list (already made there, marked **(fixes)**)
 1. Top of the list, steps 0, 1 and 5: use **`cloud/go-live-fixes`** instead of `cloud/merge-rehearsal`.
 2. Step 3: also check `SUPABASE_ANON_KEY` is listed in secrets (fix 1's Auth check needs it).
@@ -154,6 +193,8 @@ I also took a phone-size screenshot with the page's own styles to check it looks
 9. Step 9 (paperwork): add the CLAUDE.md lines suggested below.
 11. Step 5 (fix 2): `sw.js` is now `VERSION = 'ob-2026-11-04-fixes1'`. Extra phone check: Today shows the morning
     summary (or nothing, if `bc-calendar` doesn't know `summary` yet). No deploy step: it's part of the app merge.
+12. Steps 4e `search-brain` and 4h `telegram-bot` now also carry fix 3 (same flags). Extra check after 4e: **Ask**
+    still answers a question you know your notes cover. No new deploy step.
 10. P3 in the problem table is marked fixed on this branch.
 
 ## Suggested lines for CLAUDE.md (not edited, as instructed)
