@@ -138,12 +138,10 @@ function runClaude(prompt, args) {
 async function summarize(condensed) {
   const prompt = PROMPT_HEAD + condensed.replace(/<\/transcript>/gi, "") + "\n</transcript>\n";
   const strict = ["-p", "--output-format", "text", "--tools", "", "--no-session-persistence", "--strict-mcp-config"];
-  try {
-    return await runClaude(prompt, strict);
-  } catch (first) {
-    // Older claude versions may not know some flags. Retry plain; -p still can't ask for permissions.
-    try { return await runClaude(prompt, ["-p"]); } catch { throw first; }
-  }
+  // No fallback on purpose: a plain `claude -p` would have your normal tools and MCP servers
+  // (including add_thought) while reading transcript text that may contain outside content.
+  // If the locked-down run fails, nothing is written and the error goes to .worker-errors.log.
+  return await runClaude(prompt, strict);
 }
 
 function parseSummary(raw) {

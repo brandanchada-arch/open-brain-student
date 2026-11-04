@@ -6,7 +6,7 @@
 //   $FAKE_TRANSCRIPT) with its own environment. FAKE_STRIP_GUARD=1 removes the guard first
 //   (negative control: proves the test would catch a loop). Depth capped at 3.
 // - prints a summary containing a fake key; FAKE_LONG=1 prints a very long one;
-//   FAKE_FAIL_STRICT=1 fails when given --tools (tests the fallback).
+//   FAKE_FAIL_STRICT=1 fails when given --tools (tests that there is no unrestricted fallback).
 const fs = require("fs");
 const { spawnSync } = require("child_process");
 const args = process.argv.slice(2);

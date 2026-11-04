@@ -85,8 +85,9 @@ Decisions made while drafting, with nobody available to ask. Each picks the safe
   folder. Tested with a fake `claude` that fires the real hook, plus a negative control that strips the
   guard and shows the loop really happens without it.
 - `claude -p --output-format text --tools "" --no-session-persistence --strict-mcp-config`: no tools,
-  no MCP servers, not saved. If that fails (an older CLI not knowing a flag), it retries once with plain
-  `claude -p`, which still can't ask for permissions in print mode.
+  no MCP servers, not saved. If that fails (for example an older CLI not knowing a flag), nothing is
+  written and the error goes to `.worker-errors.log`. (The first draft retried with plain `claude -p`;
+  that was removed in the merge rehearsal because the retry had all tools and MCP servers available.)
 - Only typed messages are summarized: tool calls/results, meta and sidechain (subagent) entries are
   dropped. Each message capped at 1,500 chars, the whole thing at 60,000 (most recent kept).
 - Skips sessions with fewer than 3 typed prompts or under 1,500 characters of text (and transcripts

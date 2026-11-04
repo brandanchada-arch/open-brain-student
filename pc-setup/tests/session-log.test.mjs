@@ -125,11 +125,13 @@ test("upload on: sends add_session_log with a capped, redacted summary", async (
   } finally { await srv.close(); }
 });
 
-test("falls back to plain `claude -p` when the strict flags are rejected", async () => {
+test("never falls back to an unrestricted `claude -p` when the strict flags are rejected", async () => {
   const home = tempHome([]);
   const { log } = await endSession(home, writeTranscript(home, 4), { FAKE_FAIL_STRICT: "1" });
-  assert.ok(await waitFor(() => logsIn(home).length));
-  assert.deepEqual(calls(log).map((c) => c.args), [["-p", "--output-format", "text", "--tools", "", "--no-session-persistence", "--strict-mcp-config"], ["-p"]]);
+  const errLog = path.join(home, "claude-session-logs", ".worker-errors.log");
+  assert.ok(await waitFor(() => fs.existsSync(errLog)), "the failure is written to .worker-errors.log");
+  assert.deepEqual(calls(log).map((c) => c.args), [["-p", "--output-format", "text", "--tools", "", "--no-session-persistence", "--strict-mcp-config"]]);
+  assert.equal(logsIn(home).length, 0, "no summary written");
 });
 
 test("hook survives garbage input, missing transcript and no settings", async () => {
