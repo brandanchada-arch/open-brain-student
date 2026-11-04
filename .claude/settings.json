@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "ask": [
+      "Bash(git push *master*)",
+      "Bash(git * push *master*)",
+      "PowerShell(git push *master*)",
+      "PowerShell(git * push *master*)"
+    ],
+    "deny": [
+      "Bash(git push *--force*)",
+      "Bash(git push * -f)",
+      "Bash(git push * -f *)",
+      "Bash(git push -f *)",
+      "Bash(git push * +*)",
+      "Bash(git * push *--force*)",
+      "Bash(git * push * -f)",
+      "Bash(git * push * -f *)",
+      "Bash(git * push * +*)",
+      "PowerShell(git push *--force*)",
+      "PowerShell(git push * -f)",
+      "PowerShell(git push * -f *)",
+      "PowerShell(git push -f *)",
+      "PowerShell(git push * +*)",
+      "PowerShell(git * push *--force*)",
+      "PowerShell(git * push * -f)",
+      "PowerShell(git * push * -f *)",
+      "PowerShell(git * push * +*)"
+    ]
+  }
+}
