@@ -19,7 +19,7 @@
 // service role, and the function treats it as an app user or refuses it.
 // ─────────────────────────────────────────────────────────────
 
-/** The token after "Bearer ", or "" if there is none. */
+/** The token, with or without "Bearer " in front (the enrich-thought webhook sends none). "" if there is none. */
 export function bearerToken(req: Request): string {
   return (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
 }

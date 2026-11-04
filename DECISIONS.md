@@ -47,6 +47,13 @@ One line each: date, decision, why.
 - Every repo file is served publicly by Vercel, including `tests/`, `pc-setup/` and `package.json`. None hold keys or real user ids.
 - Re-running a digest on another day adds a new entry: the title holds the dates, so "same title updates" only applies to the same dates.
 
+## Overnight build (2026-11-04)
+
+- 2026-11-04: `weekly-digest` and `backfill-links` keep including outdated notes. Brandan's choice.
+- 2026-11-04: `enrich-thought` uses the existing `isServiceCaller`. Yes/no queries showed the webhook sends a service-role JWT with no "Bearer", which that check already accepts. If the token ever stops matching the key and Auth can't be reached, the caller is refused and `backfill-embeddings` repairs what was missed.
+- 2026-11-04: Friday suggestions save through a separate key-protected function, not an MCP tool, so no AI chat can send pushes.
+- 2026-11-04: News lists and suggestions stay out of the condenser and quizzes: neither is a fact about the owner.
+
 ## After go-live (2026-11-03)
 
 - 2026-11-03: `save_to_library` MCP tool added, because Claude reading a page is easier for Brandan than pasting links. Owner comes from `OWNER_USER_ID`, never the arguments; it never writes to `thoughts`; door check and indexing use the same path as the capture functions; re-saving a URL updates that entry.

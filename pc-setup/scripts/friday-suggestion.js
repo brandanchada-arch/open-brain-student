@@ -29,6 +29,7 @@ const PROMPT_HEAD = `Between <items> tags are one person's notes and work logs f
 
 Give ONE suggestion for their software projects or for their personal knowledge base. Base it only on the items.
 Never suggest anything about studying, classes, exams, job search, applications or interviews.
+The S items are private work logs: use them to decide, but don't quote or retell them. Say only what to do and why.
 If nothing is worth suggesting, reply with exactly: NOTHING
 
 Otherwise reply in exactly this format, under 150 words:

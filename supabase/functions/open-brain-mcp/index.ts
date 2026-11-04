@@ -11,7 +11,7 @@ import {
   ADD_THOUGHT_DESCRIPTION, LibraryInputError, MAX_CONTENT_CHARS, SAVE_DOC_TYPES, SAVE_TO_LIBRARY_DESCRIPTION, saveToLibrary,
 } from "../_shared/library-mcp.ts";
 import {
-  ADD_SESSION_LOG_DESCRIPTION, addSessionLog, GET_CORE_DESCRIPTION, GET_PAGE_DESCRIPTION, getCoreText, getPageText, MCP_INSTRUCTIONS,
+  ADD_SESSION_LOG_DESCRIPTION, addDoorFlags, addSessionLog, GET_CORE_DESCRIPTION, GET_PAGE_DESCRIPTION, getCoreText, getPageText, labelRecent, MCP_INSTRUCTIONS,
 } from "../_shared/core-memory.ts";
 
 // These come from Supabase automatically — no setup needed.
@@ -546,7 +546,7 @@ Deno.serve(async (req) => {
         const limit = args.limit ?? 10;
         const { data, error } = await supabase
           .from("thoughts")
-          .select("id, content, created_at")
+          .select("id, content, created_at, outdated_at")
           .eq("user_id", OWNER_USER_ID)
           .is("archived_at", null) // moved-to-library thoughts are hidden
           .order("created_at", { ascending: false })
@@ -556,7 +556,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify(rpcResult(id, {
-            content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+            content: [{ type: "text", text: JSON.stringify(labelRecent(data ?? []), null, 2) }],
           })),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
@@ -643,7 +643,7 @@ Deno.serve(async (req) => {
         }));
         const mode = !query ? "filters only (newest first)"
           : queryEmbedding ? "hybrid (meaning + keywords)" : "keyword only (fallback: embeddings unavailable)";
-        return textResult(id, { mode, results });
+        return textResult(id, { mode, results: await addDoorFlags(supabase, OWNER_USER_ID ?? "", results) });
       }
 
       if (toolName === "list_library") {

@@ -68,6 +68,29 @@ drop table if exists public.news_channels;
 ```
 Then redeploy `weekly-condenser` from `master`. Lists already saved stay in the Library.
 
+## Small fixes: going live
+
+**1. Check the webhook first.** This asks yes/no questions only, and never shows the key:
+```bash
+npx supabase db query --linked --read-only -f supabase/sql/checks/enrich-webhook-check.sql
+```
+Deploy the lock only if you get one row with `has_auth_header`, `role_is_service` and `not_expired` all `true`.
+All three were `true` on Nov 4, and the webhook doesn't use the word "Bearer" (`has_word_bearer` = `false`), which the lock accepts.
+
+**2. Deploy:**
+```bash
+npx supabase functions deploy enrich-thought --project-ref zqbjxbdborfahsomluye --yes
+```
+```bash
+npx supabase functions deploy open-brain-mcp --no-verify-jwt --project-ref zqbjxbdborfahsomluye --yes
+```
+**3. Prove it straight away.** Save one test note of 20+ characters in the app, wait a minute, and check it has tags.
+This matters: if the lock ever refused the webhook, new notes would save but stop getting tags and embeddings.
+
+**Not checked:** functions that exist only on Supabase. Nothing in either repo calls `enrich-thought` directly, but the deployed-only ones (like `capture-voice`) weren't read. They'd normally just save a note and let the webhook run.
+
+**Undo:** redeploy `enrich-thought` from `master`. Any note missed in between gets repaired by `backfill-embeddings`.
+
 ## Friday suggestions: going live
 
 From `C:\Users\josep\open-brain-student`, once merged:
@@ -86,6 +109,8 @@ powershell -ExecutionPolicy Bypass -File pc-setup\install-friday-suggestion.ps1
 node "$env:USERPROFILE\.open-brain\scripts\friday-suggestion.js"
 ```
 **Not tested for real:** the actual `claude -p` run with `--model haiku --max-turns 1`, and the Windows task.
+
+**A limit to know:** session log text is never uploaded, and the AI is told not to quote it. But the suggestion is written by an AI that read those logs, so code can't fully rule out a paraphrase in the saved text.
 
 **Decided for you:** a week needs at least 3 notes or logs. If the AI's answer mentions study or job topics, code throws it away, even on a false match. The push always uses the same short text.
 
