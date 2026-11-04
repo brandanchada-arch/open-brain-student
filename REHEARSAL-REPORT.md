@@ -28,7 +28,7 @@ already on master (not caused by these branches). It doesn't block go-live, but 
 | P4 | Low | `cloud/check-command`: Vercel will see `package.json` | Open, checked by the preview in go-live step 1 |
 | P5 | Low | personal details (no keys or real user ids found) | Open, optional tidy-up |
 | P6 | Low | `cloud/ask-edit-check`: Ask also sends library entries the door check flagged | **Fixed on `cloud/go-live-fixes`** (fix 3) |
-| P7 | Low | `cloud/pc-setup`: PC backup leaves out `library_links` | Open |
+| P7 | Low | `cloud/pc-setup`: PC backup leaves out `library_links` | **Fixed on `cloud/go-live-fixes`** (fix 4) |
 | P8 | Low | `cloud/ask-edit-check`: `save_thought_edit` relies on Supabase's default grant for the service role | Open, checked in go-live step 2 |
 | P9 | Info | `master`: `enrich-thought` trusts whatever is POSTed to it | Open, outside scope |
 
@@ -298,7 +298,7 @@ Don't commit while it's renamed.
 | g | `daily-quiz`, `gap-questions` **(fixes: include fix 1)** | `--no-verify-jwt` (only after step 2!) | 1. Study → Quiz and Gaps load in the live app (your login stays in app mode). 2. POST each with the made-up token from 4b → **401** and **no** Telegram message. 3. POST `daily-quiz` once with `Authorization: Bearer <service role key>` → `{"ok":true,"sent":3,…}` (or `skipped`) and a quiz in Telegram. | `cd ..\ob-master; npx supabase functions deploy <name> --project-ref <ref> --no-verify-jwt` |
 | h | `telegram-bot` **(fixes: includes fix 3)** | `--no-verify-jwt` | `/recent` still answers; `/ask what did I do last week?` → short answer + "Notes used" | redeploy from master copy with `--no-verify-jwt`, then POST `{"setup": true}` with the secret header |
 | i | `enrich-thought` | none (`config.toml` keeps `verify_jwt = false`) | add a test thought in the app; within a minute it has tags | redeploy from master copy |
-| j | `export-brain` (new) | `--no-verify-jwt` | POST with `Authorization: Bearer wrong` → 401 | delete it |
+| j | `export-brain` (new) **(fixes: includes fix 4)** | `--no-verify-jwt` | POST with `Authorization: Bearer wrong` → 401. **(fixes)** POST `{"table":"library_links"}` with the right key → 200 | delete it |
 | k | **(fixes)** `weekly-digest` (fix 1) | none (`config.toml` keeps `verify_jwt = false` for it) | 1. POST with the made-up token from 4b → **401**. 2. **Go-live test run of the real Sunday job** (and of every job from step 3b): in the SQL Editor run `do $$ begin execute (select command from cron.job where jobname = '<job name from 3b>'); end $$;` then, after a minute, Edge Functions → `weekly-digest` → Logs must show `Saved digest …` or `No digest this week`, **not** 401. (Costs one AI call; same-week digest is updated, not duplicated.) For a `daily-quiz`/`gap-questions` job, success is a new message in Telegram. | If the job gets 401: `cd ..\ob-master; npx supabase functions deploy weekly-digest --project-ref <ref>` (for quiz/gaps add `--no-verify-jwt`), then note it in `FIXES-REPORT.md` |
 
 `backfill-chunks`, `backfill-embeddings`, `backfill-links`, `call-llm` and `generate-embedding`
@@ -325,7 +325,7 @@ Check: `select jobname, schedule from cron.job;` shows `weekly-brain-condenser` 
 → `weekly-condenser` Logs show `weekly-condenser: {"ok":true…` and not 401.
 Undo: `select cron.unschedule('weekly-brain-condenser');`
 
-**7. PC setup** (needs 4c and 4j live). Follow `pc-setup/README.md` items 1 → 2 → 3 (already deployed in 4j) →
+**7. PC setup** (needs 4c and 4j live). **(fixes)** The export `--check` now also prints `OK library_links`. Follow `pc-setup/README.md` items 1 → 2 → 3 (already deployed in 4j) →
 "Before items 4–6" → 4 → 5 → 6. Each item there has its own check and undo. Always merge into
 `%USERPROFILE%\.claude\settings.json`; never replace it.
 

@@ -16,7 +16,7 @@ Nothing was pushed to master, no other branch was changed, nothing was deployed,
 | 1 | Forged service tokens (`weekly-digest`, `daily-quiz`, `gap-questions`, `weekly-condenser`) | **done**, commit `67ba821` |
 | 2 | Today page shows the morning summary | **done**, commit `c0d5e58` |
 | 3 | Ask skips door-flagged library entries (P6) | **done**, commit `6c22c7d` |
-| 4 | Backup keeps `library_links` (P7) | not started |
+| 4 | Backup keeps `library_links` (P7) | **done**, commit `d458cd9` |
 
 ---
 
@@ -178,6 +178,42 @@ Undo: as in the list (redeploy from the master copy).
 
 ---
 
+## Fix 4: the backup keeps library links (P7)
+
+### What it does, in plain words
+`library_links` records "this takeaway thought came from that library entry". The search jobs can rebuild
+embeddings, chunks and thought links, but **nothing can rebuild these**, so they need to be in the backup.
+- `export-brain` now accepts `{"table": "library_links"}`. That table has no `id` and no `user_id` of its own,
+  so it can't be paged and filtered the same way as the others. Instead each page takes the next batch of
+  **your** library entries (`library` filtered by `user_id = OWNER_USER_ID`, ordered by id — the same rule as the
+  table's own RLS policy) and returns every link pointing at them. The cursor is the last library id, so all links
+  of one entry always come together and none are skipped. A page can be empty and still not be the last
+  (an entry with no links). Read-only: it only runs selects. Page size limits are the same (1–50).
+- `pc-setup/scripts/weekly-export.js` downloads them and adds `library_links` (and `counts.library_links`) to the
+  backup JSON; `--check` also tests them. The backup `version` stays 1 (one key added).
+  **Safer choice:** if the PC talks to an older `export-brain` that doesn't know `library_links`, the backup is still
+  written, with `library_links: null`, and the log says `WARNING: library_links were NOT backed up … Redeploy
+  export-brain`. Any other error still stops the run, as before.
+- `pc-setup/tests/fake-supabase.mjs` gained `.in()` (one line), `pc-setup/README.md` mentions `OK library_links` in
+  the `--check` output, and `pc-setup/NOTES.md` no longer lists `library_links` as "not exported".
+
+### Tests (`pc-setup/tests/library-links.test.mjs`, 5 tests, existing fakes)
+- the real handler with page sizes 1, 2, 3 and 50: exactly your 5 links (3 on one entry), none from someone
+  else's entry, only `thought_id`, `library_id`, `note`, `created_at`; with page size 1 an empty page is not the end;
+- every page reads `library` with `user_id` and `library_links` with `in(library_id)`; the fake refuses writes;
+- a bad cursor → 400;
+- the real PC script against the fake server: the backup has `library_links` (5) and its count, no other
+  person's link, no user id; `--check` prints `OK library_links`;
+- against a fake "older" export-brain: the run still succeeds, writes `library_links: null`, and warns.
+With the old handler and script put back, all 5 fail.
+
+### Redeploy for fix 4
+`export-brain` (`--no-verify-jwt`). Already step 4j (new in this go-live, undo = delete). Extra check after 4j:
+POST `{"table":"library_links"}` with the right key → `200` and `{"table":"library_links",…}`. The PC script is
+copied in step 7 as before (`pc-setup/README.md`); its `--check` should now also print `OK library_links`.
+
+---
+
 ## Changes to REHEARSAL-REPORT.md's go-live list (already made there, marked **(fixes)**)
 1. Top of the list, steps 0, 1 and 5: use **`cloud/go-live-fixes`** instead of `cloud/merge-rehearsal`.
 2. Step 3: also check `SUPABASE_ANON_KEY` is listed in secrets (fix 1's Auth check needs it).
@@ -195,6 +231,9 @@ Undo: as in the list (redeploy from the master copy).
     summary (or nothing, if `bc-calendar` doesn't know `summary` yet). No deploy step: it's part of the app merge.
 12. Steps 4e `search-brain` and 4h `telegram-bot` now also carry fix 3 (same flags). Extra check after 4e: **Ask**
     still answers a question you know your notes cover. No new deploy step.
+13. Step 4j `export-brain` now carries fix 4 (same flag `--no-verify-jwt`). Extra check: `{"table":"library_links"}`
+    with the right key → 200. Step 7: the PC `--check` also prints `OK library_links`.
+14. P6 and P7 in the problem table are marked fixed on this branch.
 10. P3 in the problem table is marked fixed on this branch.
 
 ## Suggested lines for CLAUDE.md (not edited, as instructed)
@@ -202,3 +241,35 @@ Undo: as in the list (redeploy from the master copy).
 - In "Deploying", add `weekly-digest`, `daily-quiz`, `gap-questions` and `weekly-condenser` to "Anything importing `_shared/` must be redeployed…" (weekly-condenser is new).
 - Gotcha: **Reading a JWT's `role` proves nothing.** Functions with `verify_jwt = false` / `--no-verify-jwt` must check the
   token itself (`_shared/service-caller.ts`). (2026-11-04)
+
+---
+
+## Final test results (this branch, Linux, Node 22.23)
+| What | Result |
+|---|---|
+| `npm install` | OK |
+| `npm run check` (no Deno) | **Check passed**: JS syntax 49 files + 1 inline script; tests **157 passed in 18 files**; SQL 4 of 4 load, 3 re-run |
+| `npm run check` with Deno 2.5.6 (from npm, in a scratch folder) | **Check passed**: 13 of 20 function folders type-check; the other 7 import esm.sh, which this computer can't reach |
+| Those 7 with esm.sh pointed at the npm copy of supabase-js (scratch import map, repo unchanged) | all 7 type-check, so 20 of 20 |
+| `tests/core-memory/` | 36 pass, 0 fail |
+| `tests/ask-edit-check/` (incl. the headless-browser UI test, which ran) | 53 pass, 0 fail |
+| `tests/go-live-fixes/` (new: fixes 1–3, incl. 2 headless-browser tests, which ran) | 43 pass, 0 fail |
+| `pc-setup/tests/` (`node --experimental-strip-types --test pc-setup/tests/*.test.mjs`) | 25 pass, 0 fail (20 old + 5 new) |
+| New tests against the old code | fix 1: 11 of 27 fail; fix 3: 7 of 8 fail; fix 4: 5 of 5 fail (fix 2's tests need the new function, so they can't load against the old file) |
+
+## What couldn't be tested here
+- **Supabase Auth's real answer** to fix 1's admin check (`GET /auth/v1/admin/users?per_page=1`). The tests fake
+  it. Go-live step 4k's test run of the real scheduled job is the check. The exact-key path needs no Auth call.
+- **What token the live Sunday digest job and the quiz/gaps scheduler send** (not in this repo; step 3b finds out
+  without printing keys), and whether the Vault secret is identical to `SUPABASE_SERVICE_ROLE_KEY`.
+- Whether `SUPABASE_ANON_KEY` is present in the live function environment (Supabase normally provides it; step 3).
+- **`bc-calendar`'s real `summary` reply** (private repo). The page was tested against the shape given in the task
+  and against error replies. Not tried on a real phone.
+- PostgREST's handling of the export's `.in("library_id", …)` with up to 50 ids, and the two `.order()` calls,
+  on the real database (the fake database stands in).
+- Real deploys, the live database, Telegram, real AI answers, Vercel, Windows Task Scheduler (as in the rehearsal).
+
+---
+
+Branch: **`cloud/go-live-fixes`** (pushed; the environment accepted this name). Nothing was pushed to master and
+no other branch was changed.
