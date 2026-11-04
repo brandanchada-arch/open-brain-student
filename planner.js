@@ -182,10 +182,34 @@ function plannerSkippedRows(list, emails, now) {
     .map(r => ({ n: r.n, from: r.email.from_name || r.email.from_email, subject: r.email.subject || '', learned: r.email.feedback === 'should_ping' }));
 }
 
+// The morning summary + what's still waiting, from bc-calendar {action: "summary"}.
+// `res` is what sb.functions.invoke returned ({ data, error }). Anything unexpected
+// (an older bc-calendar that doesn't know "summary", an error, nothing yet) gives ''
+// so the Today tab simply shows nothing. All outside text goes through `esc`.
+function plannerSummaryHtml(res, esc) {
+  const data = res && !res.error ? res.data : null;
+  if (!data || data.ok !== true) return '';
+  const s = data.summary && typeof data.summary.text === 'string' && data.summary.text.trim() ? data.summary : null;
+  const waiting = (Array.isArray(data.waiting) ? data.waiting : [])
+    .filter(w => w && typeof w.text === 'string' && w.text.trim()).slice(0, 8);
+  if (!s && !waiting.length) return '';
+  const when = iso => { const d = new Date(iso); return isNaN(d) ? '' : plannerFmtTime(iso); };
+  const text = s ? s.text.trim() : '';
+  const body = s ? `<div class="pl-item"><div class="pl-body"><div class="pl-when" style="white-space:pre-wrap;">${esc(text.length > 1500 ? text.slice(0, 1500) + '…' : text)}</div></div></div>` : '';
+  const list = waiting.map(w => `<div class="pl-item"><div class="pl-body"><div class="pl-title">${esc(w.text.trim().slice(0, 200))}</div>
+    <div class="pl-when">${w.kind ? `<span class="pl-chip">${esc(String(w.kind).slice(0, 30))}</span> ` : ''}${esc(when(w.created_at))}</div></div></div>`).join('');
+  // Already delivered and nothing waiting: keep it folded away, like "Notifications: on".
+  if (s && s.delivered === true && !waiting.length) {
+    return `<details class="card" style="margin-bottom:8px;"><summary style="cursor:pointer; font-size:13px; color:#999;">Morning summary${when(s.created_at) ? ' · ' + esc(when(s.created_at)) : ''}</summary>${body}</details>`;
+  }
+  return (s ? `<div class="pl-day">Morning summary${when(s.created_at) ? ` <span style="text-transform:none; font-weight:400;">${esc(when(s.created_at))}</span>` : ''}</div>${body}` : '') +
+    (waiting.length ? `<div class="pl-day">Still waiting</div>${list}` : '');
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     plannerBuildView, plannerRange, plannerDayKey, plannerFormToTask, plannerScheduleTimes, plannerDurationOptions, plannerCleanGoalName,
-    plannerPushStatus, plannerB64ToBytes, plannerQuickSummary, plannerSkippedRows,
+    plannerPushStatus, plannerB64ToBytes, plannerQuickSummary, plannerSkippedRows, plannerSummaryHtml,
   };
 }
 
@@ -259,6 +283,7 @@ if (typeof document !== 'undefined') {
       P.checks = checks.data || [];
       plannerRenderWaiting(P.props, P.checks);
       plannerLoadSkipped();
+      plannerLoadSummary();
       if (!P.pushChecked) { P.pushChecked = true; plannerRenderPush(true); }
       plannerRender(plannerBuildView(tasks || [], events, P.view, now));
 
@@ -488,6 +513,14 @@ if (typeof document !== 'undefined') {
         r.map(x => `<div class="pl-item"><div class="pl-body"><div class="pl-title">${esc(x.from)}</div><div class="pl-when">${esc(x.subject)}</div>
           <div class="pl-actions">${x.learned ? '<span class="pl-chip">Will come through from now on</span>' : `<button class="secondary" data-skipped="${x.n}">Should have come through</button>`}</div></div></div>`).join('') : '';
     } catch { el('plannerSkipped').innerHTML = ''; }
+  }
+
+  // ---- The morning summary (the push says "ready in the app") ----
+  async function plannerLoadSummary() {
+    let html = '';
+    try { html = plannerSummaryHtml(await api({ action: 'summary' }), esc); } catch { html = ''; }
+    const box = el('plannerSummary');
+    if (box) box.innerHTML = html;
   }
 
   async function plannerLearnSkipped(n) {
