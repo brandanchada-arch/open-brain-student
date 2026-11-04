@@ -11,6 +11,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { jsonrepair } from "npm:jsonrepair@3";
 import { runCondenser } from "./handler.ts";
+import { isServiceCaller } from "../_shared/service-caller.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -24,23 +25,6 @@ function reply(body: unknown, status = 200) {
   });
 }
 
-// Copied from weekly-digest. Let in only master-key callers: either the key this
-// function has built in, or a service_role token (what Vault sends). Supabase's
-// front door has already verified the token is genuine before this code runs.
-function isServiceCaller(req: Request): boolean {
-  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  if (!token) return false;
-  if (token === SERVICE_ROLE_KEY) return true;
-  try {
-    const part = token.split(".")[1];
-    if (!part) return false;
-    const b64 = part.replace(/-/g, "+").replace(/_/g, "/")
-      .padEnd(Math.ceil(part.length / 4) * 4, "=");
-    return JSON.parse(atob(b64)).role === "service_role";
-  } catch {
-    return false;
-  }
-}
 
 async function callLlm(systemPrompt: string, prompt: string, maxTokens: number) {
   // With the header, or call-llm says 401
@@ -69,7 +53,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return reply({ error: "Use POST" }, 405);
 
   // Only your own scheduler and functions may run this.
-  if (!isServiceCaller(req)) return reply({ error: "Unauthorized" }, 401);
+  if (!(await isServiceCaller(req))) return reply({ error: "Unauthorized" }, 401);
   if (!OWNER_USER_ID) return reply({ error: "OWNER_USER_ID is not set in Edge Function secrets" }, 500);
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {

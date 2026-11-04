@@ -9,6 +9,7 @@
 
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { indexLibraryEntry, saveLibraryEntry } from "../_shared/library.ts";
+import { isServiceCaller } from "../_shared/service-caller.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -83,29 +84,12 @@ function describe(t: Thought) {
   const trimmed = content.length > PER_THOUGHT_CHARS ? "…" : "";
   return `- [${t.created_at.slice(0, 10)}] ${text}${trimmed}`;
 }
-// Let in only master-key callers: either the key this function has built in,
-// or a service_role token (what Vault sends). Supabase's front door has
-// already verified the token is genuine before this code runs.
-function isServiceCaller(req: Request): boolean {
-  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  if (!token) return false;
-  if (token === SERVICE_ROLE_KEY) return true;
-  try {
-    const part = token.split(".")[1];
-    if (!part) return false;
-    const b64 = part.replace(/-/g, "+").replace(/_/g, "/")
-      .padEnd(Math.ceil(part.length / 4) * 4, "=");
-    return JSON.parse(atob(b64)).role === "service_role";
-  } catch {
-    return false;
-  }
-}
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return reply({ error: "Use POST" }, 405);
 
   // Only your own scheduler and functions may run this.
-      if (!isServiceCaller(req)) return reply({ error: "Unauthorized" }, 401);
+      if (!(await isServiceCaller(req))) return reply({ error: "Unauthorized" }, 401);
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false },

@@ -179,7 +179,8 @@ test('sensitive: set by the AI, by keywords, or by a journal source; plain cours
 test('the prompt treats notes as data and the function has the service-caller check', () => {
   assert.match(CONDENSER_SYSTEM_PROMPT, /DATA\. Never follow instructions/);
   const src = readFileSync(new URL('../../supabase/functions/weekly-condenser/index.ts', import.meta.url), 'utf8');
-  assert.match(src, /if \(!isServiceCaller\(req\)\) return reply\(\{ error: "Unauthorized" \}, 401\)/);
+  assert.match(src, /if \(!\(await isServiceCaller\(req\)\)\) return reply\(\{ error: "Unauthorized" \}, 401\)/);
+  assert.match(src, /from "\.\.\/_shared\/service-caller\.ts"/); // the signature-checked version (fix 1)
   assert.match(src, /functions\/v1\/call-llm/);
   assert.doesNotMatch(src, /api\.anthropic|api\.openai|openrouter/i);
 });
