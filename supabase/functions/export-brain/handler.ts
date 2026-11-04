@@ -3,7 +3,8 @@
 //   node --experimental-strip-types pc-setup/tests/export-brain.test.mjs
 //
 // What it does: hands back the owner's rows, a small page at a time, so the PC's
-// weekly export script can save a copy. READ-ONLY: it only ever runs SELECTs.
+// weekly export script can save a copy. It only reads your rows. Its one write is the time
+// of the last finished backup, in health_heartbeats, for the brain health check.
 //
 // Request:  POST  Authorization: Bearer <MCP_ACCESS_KEY>
 //   { "table": "thoughts" | "library" | "thought_links" | "library_links",
@@ -71,6 +72,19 @@ function sameSecret(a: string, b: string) {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// library_links is the last table the PC's export asks for, so finishing it means a backup
+// finished. This is the only write here, and it's only the time, for the brain health check.
+// A failure here must never break a backup.
+async function noteBackupFinished(db: Db) {
+  try {
+    const { error } = await db.from("health_heartbeats")
+      .upsert({ name: "pc-backup", last_ok_at: new Date().toISOString() }, { onConflict: "name" });
+    if (error) console.error("export-brain heartbeat:", error.message ?? error);
+  } catch (err) {
+    console.error("export-brain heartbeat:", err);
+  }
+}
+
 export async function handleExport(req: Request, deps: ExportDeps): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { error: "Use POST" });
@@ -118,6 +132,7 @@ export async function handleExport(req: Request, deps: ExportDeps): Promise<Resp
       }
       const rows = links.map(cleanRow);
       const done = ids.length < limit;
+      if (done) await noteBackupFinished(deps.db);
       return json(200, { table, rows, count: rows.length, next_after: done ? null : ids[ids.length - 1], done });
     }
 

@@ -68,6 +68,14 @@ const TOOLS = [
     },
   },
   {
+    name: "brain_health",
+    description:
+      "Check whether Open Brain is healthy: scheduled jobs that stopped, missing embeddings, new " +
+      "notes without tags, an overdue PC backup (problems), plus counts of flagged library entries, " +
+      "stale notes and proposals waiting (info). Counts and dates only, never note text.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
     name: "search_thoughts",
     description:
       "Search stored thoughts by MEANING and by EXACT KEYWORDS at the same time (hybrid " +
@@ -441,6 +449,15 @@ Deno.serve(async (req) => {
         }
         if (toolName === "get_core") return textResult(id, await getCoreText(supabase, OWNER_USER_ID));
         return textResult(id, await addSessionLog(supabase, OWNER_USER_ID, args));
+      }
+
+      if (toolName === "brain_health") {
+        if (!OWNER_USER_ID) {
+          throw new Error("OWNER_USER_ID is not set in Edge Function secrets");
+        }
+        const { data, error } = await supabase.rpc("brain_health", { p_user: OWNER_USER_ID });
+        if (error) throw new Error(`Could not read brain health: ${error.message}`);
+        return textResult(id, data);
       }
 
       if (toolName === "search_thoughts") {

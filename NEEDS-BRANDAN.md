@@ -2,6 +2,44 @@
 
 Things that need you, or an action that was off limits overnight. Newest items go under their topic.
 
+## Brain health check: going live
+
+Nothing is live yet. Merge both `overnight/finish-brain` branches first, then do these in order from
+`C:\Users\josep\open-brain-student`. The SQL goes first: until it runs, the new code stays quiet and the card stays hidden.
+
+1. Add the table and function (safe to run again):
+```bash
+npx supabase db query --linked --yes -f supabase/sql/2026-11-04-brain-health.sql
+```
+2. Deploy the three functions that changed:
+```bash
+npx supabase functions deploy review-proposal --project-ref zqbjxbdborfahsomluye --yes
+```
+```bash
+npx supabase functions deploy open-brain-mcp --no-verify-jwt --project-ref zqbjxbdborfahsomluye --yes
+```
+```bash
+npx supabase functions deploy export-brain --no-verify-jwt --project-ref zqbjxbdborfahsomluye --yes
+```
+3. Then from `C:\Users\josep\brain-calendar` (this turns on the push):
+```bash
+npx supabase functions deploy bc-tick --no-verify-jwt --project-ref zqbjxbdborfahsomluye --yes
+```
+
+**What to expect.** The first push may be real: 2 notes from late October never got tags, because the tagging
+step failed for them. They stop counting once they're 14 days old (the last one on Nov 7). Editing a note also retags it.
+The PC backup check starts after the first backup that runs on the new `export-brain`.
+
+**To switch off only the push:** set `enabled.watch_brain_health` to `false` in `bc_settings`. The card and the MCP tool keep working.
+
+**Undo:**
+- Functions: redeploy each one from `master`.
+- SQL (nothing else depends on it once the functions are back on `master`):
+```sql
+drop function if exists public.brain_health(uuid, timestamptz);
+drop table if exists public.health_heartbeats;
+```
+
 ## Morning summary push
 
 **What the records show (read-only, night of Nov 3):**
