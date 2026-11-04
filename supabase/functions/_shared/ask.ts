@@ -13,7 +13,7 @@
  * Safety: the notes are DATA. The system prompt tells the AI never to follow instructions
  * written inside them. Only short excerpts are sent, never whole long captures.
  * Library entries the door check flagged (metadata.door_check.flagged = true) are never
- * sent to the AI, same as the weekly condenser (FIXES-REPORT.md fix 3).
+ * sent to the AI, same as the weekly condenser (DECISIONS.md, 2026-11-03).
  */
 
 export const ASK_LIMITS = {

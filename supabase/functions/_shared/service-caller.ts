@@ -5,7 +5,7 @@
 // Used by weekly-digest, daily-quiz, gap-questions and weekly-condenser.
 // The old copy in each of those files only READ the "role" written inside the
 // token and never checked its signature, so anyone could make up a token that
-// says "service_role" and get in (REHEARSAL-REPORT.md P3, FIXES-REPORT.md fix 1).
+// says "service_role" and get in (DECISIONS.md, 2026-11-03).
 //
 // Now a token counts as the service role only if:
 //   1. it is exactly the SUPABASE_SERVICE_ROLE_KEY this function was given, or
