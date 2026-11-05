@@ -282,7 +282,7 @@
   .brand-mark::after { content: ''; position: absolute; left: 5px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--bg); }
   .tabbar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; height: calc(var(--nav-h) + var(--safe-bottom)); padding: 0 4px var(--safe-bottom);
-    background: rgba(255,255,255,.96); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    background: #FFFFFF; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
     transition: transform .2s ease, opacity .2s ease;
   }
   .tabbar button {
@@ -312,8 +312,7 @@
     .pl-actions button, .pl-filter button, .gt-open { min-height: 44px; }
     .legend-chip { min-height: 36px; }
     .graph-zoom .graph-tool { width: 44px; min-width: 44px; min-height: 44px; }
-    .graph-min { flex: 1 1 auto; }
-    .graph-min input { flex: 1; width: auto; min-height: 44px; }
+    .graph-min input { flex: 1; width: auto; min-width: 0; min-height: 44px; }
     .graph-toolbar > .graph-tool { flex: 0 0 auto; }
     .graph-search { flex-basis: 100%; }
     .lib-filters { grid-template-columns: 1fr 1fr; }
@@ -321,7 +320,15 @@
     .gs-near { min-height: 44px; }
     .pl-check { width: 22px; height: 22px; }
     .graph-wrap { height: clamp(340px, calc(100dvh - 360px), 560px); }
-    #demoBadge { top: auto !important; bottom: calc(var(--nav-h) + var(--safe-bottom) + 8px) !important; }
+    #demoBadge { top: calc(var(--safe-top) + 6px) !important; right: 8px !important; }
+    #app { padding-top: calc(var(--safe-top) + 40px); }
+    .graph-toolbar { gap: 6px; }
+    .graph-min { flex: 1 1 0; padding: 0 8px; gap: 6px; }
+    .graph-min > span { font-size: 12px; }
+    .graph-toolbar > .graph-tool { padding: 0 10px; font-size: 12.5px; }
+    .graph-legend { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -16px; margin-right: -16px; padding: 0 16px; }
+    .graph-legend::-webkit-scrollbar { display: none; }
+    .legend-chip { flex: 0 0 auto; }
   }
 
   /* Computers: sidebar navigation */
@@ -583,7 +590,7 @@
         <label class="graph-min" for="graphMin"><span>Min. links</span>
           <input type="range" id="graphMin" min="0" max="10" step="1" value="0" aria-label="Minimum connections">
           <output id="graphMinOut" for="graphMin">0</output></label>
-        <button class="graph-tool" id="graphLinks" type="button" aria-pressed="false">Strong links only</button>
+        <button class="graph-tool" id="graphLinks" type="button" aria-pressed="false">Strong links</button>
       </div>
       <div class="graph-legend" id="graphLegend" aria-label="Topics"></div>
       <div class="graph-wrap">
