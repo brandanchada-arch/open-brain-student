@@ -359,8 +359,15 @@
   #gapsBtn, #quizBtn { max-width: 760px; }
 
   /* ---------- Brain map (graph.js) ---------- */
-  .graph-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 8px; }
-  @media (min-width: 760px) { .graph-toolbar { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; } }
+  .graph-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-bottom: 8px; }
+  .graph-toolbar .gt-search { grid-column: 1 / -1; }
+  @media (max-width: 759px) {
+    #graphLegend { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-bottom: 8px; }
+    .legend-chip, .legend-all { flex: 0 0 auto; }
+    #screen-brain .screen-head { margin-bottom: 6px; }
+    #screen-brain .eyebrow { display: none; }
+  }
+  @media (min-width: 760px) { .graph-toolbar { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; } .graph-toolbar .gt-search { grid-column: auto; } }
   .gt-search { position: relative; }
   .gt-search input { padding-right: 92px; }
   .gt-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
@@ -382,7 +389,7 @@
   .graph-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
   @media (min-width: 1180px) { .graph-layout { grid-template-columns: minmax(0, 1fr) 320px; } }
   .graph-wrap { position: relative; height: min(68vh, 680px); min-height: 360px; border-radius: var(--r); overflow: hidden; background: #08101E; border: 1px solid var(--line); }
-  @media (max-width: 640px) { .graph-wrap { height: 62vh; min-height: 340px; } }
+  @media (max-width: 640px) { .graph-wrap { height: 58vh; min-height: 320px; } }
   #graphCanvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; cursor: grab; }
   #graphCanvas.pointing { cursor: pointer; }
   #graphCanvas.grabbing { cursor: grabbing; }
@@ -444,9 +451,9 @@
   .graph-stats small { font-size: 11px; color: var(--faint); font-weight: 400; }
 
   /* Sign-in */
-  #authScreen { min-height: 100vh; min-height: 100dvh; padding: calc(var(--safe-top) + 24px) 16px 24px; display: flex; align-items: center; justify-content: center;
+  #authScreen { min-height: 100vh; min-height: 100dvh; padding: calc(var(--safe-top) + 10vh) 16px 24px;
     background: radial-gradient(1200px 600px at 10% -10%, #13254A 0%, transparent 60%), var(--bg); }
-  .auth-wrap { width: 100%; max-width: 920px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+  .auth-wrap { margin: max(4vh, 0px) auto; width: 100%; max-width: 920px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
   @media (min-width: 820px) { .auth-wrap { grid-template-columns: 1.1fr 1fr; } }
   .auth-side { padding: 28px; background: linear-gradient(160deg, #0F1D38 0%, #0B1220 100%); border-bottom: 1px solid var(--line); }
   @media (min-width: 820px) { .auth-side { border-bottom: 0; border-right: 1px solid var(--line); padding: 40px; } }
