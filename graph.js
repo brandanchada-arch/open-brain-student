@@ -1,555 +1,376 @@
-// graph.js — the brain web (Brain screen > Map). v4, Oct 19, 2026: a rotating 3D brain.
-// Look and brain shape adapted from Brain Atlas by colorpulse6 (MIT License,
-// https://github.com/colorpulse6/brain-atlas), including its "Graphite" colors and lighting:
-// a faint cloud of tiny points traces a 3D brain,
-// thoughts sit inside it as brighter dots, grouped by topic into lobes.
-//
+// graph.js — the thought map (Brain screen > Map). v5 "root garden", design-v3, Nov 2026.
+// A flat garden instead of the old rotating 3D brain:
+//   - every thought is a seed; its colour is its topic (legend = the topic chips above the map)
+//   - bigger seed = more connections; the best-connected seeds grow a small sprout
+//   - links are curved, branch-like lines; links inside one topic take the topic colour
+//   - hover a seed (or tap it on a phone) for a preview card; click / "Open" shows the full thought
+//   - wheel, drag and pinch to zoom and pan; + / − / reset buttons do the same
+//   - search box highlights matching seeds and zooms to them
+//   - topic chips switch topics on and off; the slider hides seeds with few connections
 // Data: the brain_graph() function in Supabase, called with your login (RLS applies).
-//   - dots = thoughts; near-white with a faint topic tint; bigger = more links; hubs get a small crosshair
-//   - each topic lives in a part of the brain that fits it (career up front, habits in the cerebellum...)
-//   - curved lines = your strongest thought_links ("All links" shows the rest); small sparks travel along them
-//   - no text on the map: topic names are in the list under it; tap one to light up that region
-//   - drag to turn the brain, pinch to zoom; it spins slowly for a few seconds after you touch it
-//   - drag a dot and let go: it springs back. Tap a dot: the brain turns to it and the thought opens
-//   - checks for new thoughts every 40s while open; new ones flash
-// No library: canvas + a little 3D math, so it works offline from the saved copy.
+//   { clusters: [{id, name, color, size}], nodes: [{id, label, cat, at, c1, c2, w}], edges: [[a, b, w]], at }
+// No library: a canvas and a small force layout, so it works offline from the saved copy.
 
 (function () {
   const $ = (id) => document.getElementById(id);
   const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
   const REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const STRONG = 0.70;                  // "strong link" cutoff (similarity)
+  const STRONG = 0.70;                 // "strong link" cutoff (similarity)
   const POLL_MS = 40000;
-  const SPIN_MS = 12000;                // keep turning this long after the last touch, then rest (battery)
-  const HOME_ROT = { x: -0.18, y: 0.62 };
-  const MAX_EDGES = 900;                // never draw more lines than this (strongest first)
+  const MAX_EDGES = 2500;              // never draw more lines than this (strongest first)
+  const K_MIN = 0.15, K_MAX = 6;
+  // Earthy topic colours: terracotta, moss, ochre, berry, slate teal, walnut, then a few spares.
+  const PALETTE = ['#B4532A', '#5F7A3A', '#B07D1E', '#7C3F5E', '#3E6B70', '#8A5A3B', '#6D7F2E', '#9A4A44', '#55606E', '#A0702A'];
+  const INK = '#2E2419', BRANCH = 'rgba(110, 84, 58, ';
 
-  // ---------- seeded random: the map looks the same every time you open it ----------
-  function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
-  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-
-  // ---------- colors ----------
-  const hex2rgb = (h) => { const n = parseInt((h || '#9AA3AD').slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
-  const mix = (a, b, t) => [0, 1, 2].map(i => Math.round(a[i] + (b[i] - a[i]) * t));
+  // ---------- small helpers ----------
+  function hash(s) { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; }
+  function hex2rgb(h) { const m = String(h || '').replace('#', '').match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i); return m ? m.slice(1).map(x => parseInt(x, 16)) : [138, 120, 100]; }
   const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
-  const WHITE = [255, 255, 255], DUST = [214, 206, 192], GREY = [190, 190, 190];
-  const tint = (c) => mix(c, WHITE, 0.6);            // dots: near-white with a hint of the topic color
+  const lighten = (c, t) => c.map(v => Math.round(v + (255 - v) * t));
+  const darken = (c, t) => c.map(v => Math.round(v * (1 - t)));
 
-  const haloCache = new Map();
-  function haloSprite(c) {
-    const key = c.join(',');
-    let h = haloCache.get(key);
-    if (h) return h;
-    h = document.createElement('canvas'); h.width = h.height = 48;
-    const x = h.getContext('2d'), gr = x.createRadialGradient(24, 24, 0, 24, 24, 24);
-    gr.addColorStop(0, rgba(c, 0.5)); gr.addColorStop(0.3, rgba(c, 0.16)); gr.addColorStop(1, rgba(c, 0));
-    x.fillStyle = gr; x.fillRect(0, 0, 48, 48);
-    haloCache.set(key, h);
-    return h;
-  }
-
-  // ---------- the brain shape (from Brain Atlas: y up, z toward the front) ----------
-  function brainPoint(theta, phi, foldAmp) {
-    const cp = Math.cos(phi), sp = Math.sin(phi);
-    let x = 0.95 * cp * Math.sin(theta), z = 1.25 * cp * Math.cos(theta), y = 0.92 * sp;
-    if (z < -0.4) z -= 0.06 * (-z - 0.4);
-    if (z > 0.4 && y > -0.1) x *= 1 + 0.05 * Math.min(0.6, z * (y + 0.4));
-    if (y < -0.4) y = -0.4 + (y + 0.4) * 0.55;
-    if (y > 0.55 && Math.abs(x) < 0.12) y -= 0.04 * (y - 0.55) * (1 - Math.abs(x) / 0.12);   // the groove between halves
-    const fold = foldAmp * (Math.sin(theta * 11 + phi * 7) + 0.55 * Math.sin(theta * 17 - phi * 5) + 0.35 * Math.sin(theta * 5 + phi * 13));
-    const r = Math.hypot(x, y, z) || 1;
-    return { x: x + x / r * fold, y: y + y / r * fold, z: z + z / r * fold };
-  }
-  const DUST_POINTS = (() => {
-    const out = [], golden = Math.PI * (3 - Math.sqrt(5));
-    for (let i = 0; i < 1400; i++) {                 // cerebrum surface
-      const t = (i + 0.5) / 1400, phi = Math.asin(2 * t - 1), theta = (golden * i) % (Math.PI * 2);
-      out.push({ ...brainPoint(theta, phi, 0.026), tp: (i * 0.731) % 6.283, tf: 0.4 + (i % 9) / 12 });
-    }
-    for (let i = 0; i < 220; i++) {                  // cerebellum
-      const t = (i + 0.5) / 220, phi = Math.asin(2 * t - 1), th = (golden * i) % (Math.PI * 2), cp = Math.cos(phi);
-      const ridge = 0.02 * Math.sin(th * 14 + phi * 9);
-      out.push({ x: (0.40 + ridge) * cp * Math.sin(th), y: -0.55 + 0.26 * Math.sin(phi), z: -0.78 + (0.32 + ridge) * cp * Math.cos(th), tp: (i * 0.91) % 6.283, tf: 0.5 + (i % 5) / 8 });
-    }
-    for (let i = 0; i < 28; i++) {                   // brain stem
-      const t = (i / 28) * 0.6, a = ((i * 1.31) % 1) - 0.5;
-      out.push({ x: a * 0.06, y: -0.55 - t * 0.45, z: -0.55 + a * 0.04, tp: i * 0.55, tf: 0.3 });
-    }
-    return out;
-  })();
-  // tint each dust point with the color of the nearest topic region
-  function tintDust() {
-    const regs = [...G.anchors.values()];
-    for (const p of DUST_POINTS) {
-      let best = null, bd = Infinity;
-      for (const R of regs) for (const sx of (R.mirror ? [1, -1] : [1])) {
-        const d = (p.x - R.c.x * sx) ** 2 + (p.y - R.c.y) ** 2 + (p.z - R.c.z) ** 2;
-        if (d < bd) { bd = d; best = R; }
-      }
-      p.col = best ? mix(hex2rgb(best.color), DUST, 0.35) : DUST;
-      p.key = p.col.join(',');
-    }
-  }
-  const insideBrain = (p) => (p.x / 0.88) ** 2 + (p.y / 0.84) ** 2 + (p.z / 1.16) ** 2 <= 1
-    || ((p.x / 0.36) ** 2 + ((p.y + 0.55) / 0.22) ** 2 + ((p.z + 0.78) / 0.28) ** 2 <= 1);
-
-  // Brain regions and which topics belong there (matched by topic name; leftovers fill free regions).
-  const REGIONS = [
-    { c: { x: 0.18, y: 0.32, z: 0.78 }, r: 0.36, color: '#c9b896', area: 'Frontal lobe', re: /career|job|goal|plan|\bme\b/i },
-    { c: { x: -0.2, y: -0.05, z: 0.92 }, r: 0.3, color: '#d4b878', area: 'Prefrontal', re: /strateg|decision|leader/i },
-    { c: { x: 0, y: 0.68, z: 0.22 }, r: 0.32, color: '#9aa4ac', area: 'Motor cortex', re: /\bai\b|build|code|tech|project/i },
-    { c: { x: -0.1, y: 0.62, z: -0.32 }, r: 0.34, color: '#a8b3a0', area: 'Parietal lobe', re: /mega|sim|game|case/i },
-    { c: { x: 0.5, y: 0.36, z: -0.4 }, r: 0.28, color: '#c0b888', area: 'Parietal lobe', re: /financ|class|course|school|study/i },
-    { c: { x: 0, y: 0.06, z: -0.95 }, r: 0.32, color: '#a8b0bc', area: 'Occipital lobe', re: /idea|video|watch|read|learn/i },
-    { c: { x: 0.62, y: -0.16, z: 0.12 }, r: 0.3, color: '#d4d0c4', area: 'Temporal lobe', re: /personal|memor|life|family|faith/i, mirror: true },
-    { c: { x: 0, y: -0.55, z: -0.78 }, r: 0.27, color: '#c89878', area: 'Cerebellum', re: /daily|win|habit|routine|done/i },
-    { c: { x: -0.45, y: 0.3, z: 0.25 }, r: 0.3, color: '#b89898', area: 'Center', re: null },
-    { c: { x: 0, y: 0.15, z: 0 }, r: 0.3, color: '#a89cb0', area: 'Center', re: null },
-  ];
-
-  // ---------- state ----------
   const G = {
-    nodes: [], byId: new Map(), edges: [], clusters: [], cById: new Map(), anchors: new Map(),
-    rot: { ...HOME_ROT }, zoom: 1, W: 0, H: 0, dpr: 1,
-    strongOnly: true, showDust: true, density: 1, spread: 1, highlight: null, selected: null, drag: null, pinch: null, turnTo: null,
-    visible: false, raf: 0, poll: 0, lastUser: 0, lastFrame: 0, signals: [], lastSpark: 0, at: null,
+    nodes: [], byId: new Map(), edges: [], clusters: [], cById: new Map(),
+    view: { x: 0, y: 0, k: 1 }, W: 300, H: 300, dpr: 1,
+    hidden: new Set(), minDeg: 0, maxDeg: 0, query: '', matches: null,
+    hover: null, card: null, selected: null, strongOnly: false,
+    pointers: new Map(), drag: null, pinch: null, tween: null,
+    visible: false, raf: 0, dirty: true, poll: 0, at: null, fitted: false,
   };
 
+  // ---------- layout: topics are beds in the garden, a small force layout settles the seeds ----------
   function placeClusters() {
-    const used = new Set(), place = new Map();
-    const bySize = G.clusters.slice().sort((a, b) => (b.size || 0) - (a.size || 0));
-    for (const c of bySize) {
-      const i = REGIONS.findIndex((r, k) => !used.has(k) && r.re && r.re.test(c.name || ''));
-      if (i >= 0) { used.add(i); place.set(c.id, i); }
-    }
-    for (const c of bySize) {
-      if (place.has(c.id)) continue;
-      const i = REGIONS.findIndex((r, k) => !used.has(k));
-      if (i >= 0) { used.add(i); place.set(c.id, i); }
-    }
-    G.anchors = new Map(G.clusters.map((c, j) => [c.id, REGIONS[place.get(c.id) ?? (j % REGIONS.length)]]));
+    const list = G.clusters.slice().sort((a, b) => a.id - b.id);
+    const n = Math.max(1, list.length);
+    const R = 140 + Math.sqrt(G.nodes.length) * 22;
+    list.forEach((c, i) => {
+      const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
+      const cc = G.cById.get(c.id);
+      cc.cx = n === 1 ? 0 : Math.cos(a) * R; cc.cy = n === 1 ? 0 : Math.sin(a) * R * 0.82;
+    });
   }
 
-  // Put a thought somewhere inside its region (same spot every time), a little toward a
-  // second topic if it sits between two, and near an older thought it links to (makes threads).
-  function placeNode(n) {
-    const A = G.anchors.get(n.c1) || { c: { x: 0, y: 0.15, z: 0 }, r: 0.4 };
-    const B = G.anchors.get(n.c2);
-    const r = rng(hash(n.id));
-    const side = A.mirror && r() < 0.5 ? -1 : 1;
-    let base = { x: A.c.x * side, y: A.c.y, z: A.c.z };
-    if (B && n.w > 0.05) {
-      const bx = B.mirror ? Math.abs(B.c.x) * Math.sign(base.x || 1) : B.c.x;
-      base = { x: base.x + (bx - base.x) * n.w, y: base.y + (B.c.y - base.y) * n.w, z: base.z + (B.c.z - base.z) * n.w };
+  function layout(iterations, onlyNew) {
+    const N = G.nodes;
+    if (!N.length) return;
+    const spring = 46, rep = 1400, cell = 90;
+    for (let it = 0; it < iterations; it++) {
+      const alpha = 1 - it / iterations;
+      // repulsion between seeds that are close (grid, so it stays fast with thousands of seeds)
+      const grid = new Map();
+      for (const n of N) { const key = Math.floor(n.x / cell) + ',' + Math.floor(n.y / cell); let b = grid.get(key); if (!b) grid.set(key, b = []); b.push(n); n.fx = 0; n.fy = 0; }
+      for (const n of N) {
+        const gx = Math.floor(n.x / cell), gy = Math.floor(n.y / cell);
+        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+          const b = grid.get((gx + dx) + ',' + (gy + dy)); if (!b) continue;
+          for (const m of b) {
+            if (m === n) continue;
+            let x = n.x - m.x, y = n.y - m.y, d2 = x * x + y * y;
+            if (d2 > cell * cell) continue;
+            if (d2 < 0.01) { x = hash(n.id) - 0.5; y = hash(m.id) - 0.5; d2 = 0.5; }
+            const f = rep / d2;
+            n.fx += x * f / Math.sqrt(d2); n.fy += y * f / Math.sqrt(d2);
+          }
+        }
+      }
+      for (const e of G.edges) {
+        const a = G.byId.get(e.a), b = G.byId.get(e.b);
+        const x = b.x - a.x, y = b.y - a.y, d = Math.sqrt(x * x + y * y) || 1;
+        const same = a.c1 === b.c1;
+        const f = (d - spring) * (same ? 0.05 : 0.012) * (0.5 + e.w);
+        a.fx += x / d * f; a.fy += y / d * f; b.fx -= x / d * f; b.fy -= y / d * f;
+      }
+      for (const n of N) {
+        const c = G.cById.get(n.c1);
+        if (c) { n.fx += (c.cx - n.x) * 0.018; n.fy += (c.cy - n.y) * 0.018; }
+        if (onlyNew && !n.fresh) continue;
+        const step = Math.min(12, 1.6 * alpha + 0.2);
+        const len = Math.hypot(n.fx, n.fy) || 1;
+        n.x += n.fx / len * Math.min(len, 30) * step * 0.25;
+        n.y += n.fy / len * Math.min(len, 30) * step * 0.25;
+      }
     }
-    let p;
-    for (let tries = 0; tries < 8; tries++) {
-      const u = r() * Math.PI * 2, v = Math.acos(2 * r() - 1), rad = A.r * G.spread * (n.hub ? 0.35 : 0.25 + 0.75 * Math.cbrt(r()));
-      p = { x: base.x + rad * Math.sin(v) * Math.cos(u), y: base.y + rad * Math.sin(v) * Math.sin(u) * 0.85, z: base.z + rad * Math.cos(v) };
-      if (insideBrain(p)) break;
-    }
-    if (!insideBrain(p)) p = { x: base.x, y: base.y, z: base.z };
-    if (n.parent && n.parent.p) {                    // drift toward a linked, older thought
-      const t = 0.3 + r() * 0.2;
-      p = { x: p.x + (n.parent.p.x - p.x) * t, y: p.y + (n.parent.p.y - p.y) * t, z: p.z + (n.parent.p.z - p.z) * t };
-    }
-    n.p = p; n.ox = n.oy = n.vx = n.vy = 0;
   }
 
   // ---------- data in ----------
-  function ingest(data, { fresh }) {
-    G.clusters = data.clusters || [];
-    const old = G.byId, firstTime = old.size === 0;
-    if (firstTime || !G.anchors.size) placeClusters();
-    G.cById = new Map(G.clusters.map(c => [c.id, { ...c, rgb: hex2rgb((G.anchors.get(c.id) || {}).color || c.color) }]));
+  function ingest(data) {
+    const prev = G.byId;
+    G.clusters = (data.clusters || []).slice();
+    G.cById = new Map(G.clusters.slice().sort((a, b) => a.id - b.id).map((c, i) => [c.id, { ...c, rgb: hex2rgb(PALETTE[i % PALETTE.length]) }]));
     const nodes = (data.nodes || []).map(r => {
-      const prev = old.get(r.id), n = prev || { id: r.id };
-      Object.assign(n, { label: r.label, cat: r.cat, at: new Date(r.at).getTime(), c1: r.c1, c2: r.c2, w: Number(r.w) || 0, deg: 0, parent: null });
-      n.isNew = !prev;
-      return n;
+      const old = prev.get(r.id);
+      return { id: r.id, label: String(r.label || ''), cat: r.cat, at: new Date(r.at).getTime(), c1: r.c1, c2: r.c2, w: Number(r.w) || 0,
+        deg: 0, x: old ? old.x : 0, y: old ? old.y : 0, fresh: !old, rot: hash(r.id) * Math.PI };
     });
     G.nodes = nodes; G.byId = new Map(nodes.map(n => [n.id, n]));
-    G.edges = (data.edges || []).map(([a, b, w]) => ({ a, b, w: Number(w) })).filter(e => G.byId.has(e.a) && G.byId.has(e.b));
-    for (const e of G.edges) { G.byId.get(e.a).deg++; G.byId.get(e.b).deg++; }
+    G.edges = (data.edges || []).map(([a, b, w]) => ({ a, b, w: Number(w) || 0 })).filter(e => G.byId.has(e.a) && G.byId.has(e.b) && e.a !== e.b);
     G.edges.sort((x, y) => y.w - x.w);
-    const degs = nodes.map(n => n.deg).sort((a, b) => b - a), hubCut = Math.max(6, degs[Math.floor(degs.length * 0.03)] || 6);
-    const newest = nodes.length ? Math.max(...nodes.map(n => n.at)) : Date.now();
-    for (const n of nodes) {
-      const a = G.cById.get(n.c1), b = G.cById.get(n.c2);
-      n.rgb = a ? (b ? mix(a.rgb, b.rgb, n.w) : a.rgb) : GREY;
-      n.dot = a ? (b ? mix(a.rgb, b.rgb, Math.round(n.w * 10) / 10) : a.rgb) : GREY;
-      n.bright = 0.7 + 0.3 * Math.exp(-Math.max(0, (newest - n.at) / 864e5) / 21);   // newer = a bit brighter
-      n.hub = n.deg >= hubCut;
+    if (G.edges.length > MAX_EDGES) G.edges.length = MAX_EDGES;
+    for (const e of G.edges) { G.byId.get(e.a).deg++; G.byId.get(e.b).deg++; e.bend = (hash(e.a + e.b) - 0.5) * 0.7; }
+    G.maxDeg = nodes.reduce((m, n) => Math.max(m, n.deg), 0);
+    const degs = nodes.map(n => n.deg).sort((a, b) => b - a);
+    const hubCut = Math.max(4, degs[Math.floor(degs.length * 0.06)] || 4);
+    for (const n of nodes) { n.hub = n.deg >= hubCut; n.r = 3.4 + Math.sqrt(n.deg) * 2.3; }
+    for (const c of G.cById.values()) c.size = nodes.filter(n => n.c1 === c.id).length;
+    placeClusters();
+    const fresh = nodes.filter(n => n.fresh);
+    for (const n of fresh) {
+      const c = G.cById.get(n.c1) || { cx: 0, cy: 0 };
+      const a = hash(n.id + 'a') * Math.PI * 2, d = 20 + hash(n.id + 'd') * 90;
+      n.x = c.cx + Math.cos(a) * d; n.y = c.cy + Math.sin(a) * d;
     }
-    // thread parent: strongest link to an older thought in the same topic
-    for (const e of G.edges) {
-      if (e.w < 0.6) continue;
-      const a = G.byId.get(e.a), b = G.byId.get(e.b);
-      if (a.c1 !== b.c1) continue;
-      const [older, newer] = a.at <= b.at ? [a, b] : [b, a];
-      if (!newer.parent && !newer.hub) newer.parent = older;
-    }
-    const order = nodes.slice().sort((x, y) => x.at - y.at);
-    if (firstTime) {
-      // As the brain grows, dots get a bit smaller and topics fill more of the brain, so it stays
-      // a cloud of points instead of turning into blobs.
-      G.density = Math.max(0.42, Math.min(1, Math.sqrt(173 / Math.max(1, nodes.length))));
-      G.spread = 1 + (1 - G.density) * 1.1;
-      tintDust();
-      order.forEach(placeNode);
-      nodes.forEach(n => { n.isNew = false; });
-    } else {
-      const added = order.filter(n => n.isNew);
-      added.forEach(placeNode);
-      if (fresh && added.length) { const t = performance.now(); added.forEach(n => { n.pulse = t; }); obGraphToast(added.length); }
-      added.forEach(n => { n.isNew = false; });
-    }
+    if (fresh.length === nodes.length) layout(nodes.length > 1500 ? 90 : 220, false);
+    else if (fresh.length) layout(80, true);
+    nodes.forEach(n => { n.fresh = false; });
+    if (G.selected) G.selected = G.byId.get(G.selected.id) || null;
+    if (G.hover) G.hover = G.byId.get(G.hover.id) || null;
     G.at = data.at;
+    const slider = $('graphMinLinks');
+    if (slider) { slider.max = String(Math.max(1, Math.min(G.maxDeg, 20))); if (G.minDeg > Number(slider.max)) setMinDeg(Number(slider.max)); }
+    applySearch(false);
     renderLegend();
-    $('graphCanvas').setAttribute('aria-label', `3D map of ${nodes.length} thoughts in ${G.clusters.length} topics`);
-    if (firstTime) resize();
-    G.lastUser = performance.now();                  // spin a little when it first appears
+    $('graphCanvas').setAttribute('aria-label', `Map of ${nodes.length} thoughts in ${G.clusters.length} topics`);
+    resize();
+    if (!G.fitted) { fit(false); G.fitted = true; }
     wake();
   }
 
-  function obGraphToast(n) {
-    const el = $('graphNote');
-    el.textContent = `${n} new ${n === 1 ? 'thought' : 'thoughts'} just landed on your map`;
-    el.style.opacity = '1'; clearTimeout(el._h); el._h = setTimeout(() => { el.style.opacity = '0'; }, 3500);
-  }
-
-  let loading = false;
   async function fetchGraph({ quiet } = {}) {
-    if (loading) return;
     if (!navigator.onLine) {
       if (!G.nodes.length) {
         const c = obCache.get('graph');
-        if (c) ingest(c.value, { fresh: false }); else $('graphStatus').textContent = 'Your map needs a connection the first time.';
+        if (c) ingest(c.value); else $('graphStatus').textContent = 'Your map needs a connection the first time.';
       }
       return;
     }
-    loading = true;
-    if (!quiet && !G.nodes.length) $('graphStatus').textContent = 'Drawing your brain…';
+    if (!quiet && !G.nodes.length) $('graphStatus').textContent = 'Planting your garden…';
     try {
       const { data, error } = await sb.rpc('brain_graph');
       if (error) throw error;
-      ingest(data, { fresh: G.nodes.length > 0 });
-      obCache.put('graph', data);                    // short labels only, never full thoughts
-      $('graphStatus').textContent = '';
+      if (G.at && data.at === G.at && G.nodes.length) return;
+      ingest(data);
+      try { obCache.put('graph', data); } catch { /* storage full: fine */ }
+      $('graphStatus').textContent = G.nodes.length ? '' : 'No thoughts on the map yet. Save one and it sprouts here.';
     } catch (err) {
-      console.warn('brain_graph failed:', err);
       if (!G.nodes.length) {
         const c = obCache.get('graph');
-        if (c) ingest(c.value, { fresh: false });
+        if (c) ingest(c.value);
         $('graphStatus').textContent = c ? '' : 'Could not load your map: ' + (err.message || 'unknown error');
       }
-    } finally { loading = false; }
+    }
   }
 
-  // ---------- 3D -> screen ----------
-  function projector() {
-    const scale = Math.min(G.W, G.H * 1.15) * 0.36 * G.zoom, dist = 3.4;
-    const cx = G.W / 2, cy = G.H / 2 + G.H * 0.03;
-    const cY = Math.cos(G.rot.y), sY = Math.sin(G.rot.y), cX = Math.cos(G.rot.x), sX = Math.sin(G.rot.x);
-    return (p) => {
-      const rx = p.x * cY + p.z * sY, z1 = -p.x * sY + p.z * cY;
-      const ry = p.y * cX - z1 * sX, z2 = p.y * sX + z1 * cX;
-      const f = scale / (dist + z2);
-      return { sx: cx + rx * f * dist, sy: cy - ry * f * dist, z: z2, s: f * dist / scale, depth: (z2 + 1.5) / 3 };
-    };
+  // ---------- what is shown ----------
+  const shown = (n) => !G.hidden.has(n.c1) && n.deg >= G.minDeg;
+  const edgeShown = (e) => (!G.strongOnly || e.w >= STRONG) && shown(G.byId.get(e.a)) && shown(G.byId.get(e.b));
+  function focusSet() {
+    const f = G.selected || G.hover;
+    if (!f) return null;
+    const s = new Set([f.id]);
+    for (const e of G.edges) { if (e.a === f.id) s.add(e.b); else if (e.b === f.id) s.add(e.a); }
+    return s;
   }
 
+  // ---------- drawing ----------
   function resize() {
     const wrap = $('graphCanvas').parentElement, r = wrap.getBoundingClientRect();
     if (!r.width || !r.height) return;
-    G.dpr = Math.min(window.devicePixelRatio || 1, G.nodes.length > 900 ? 2 : 3);
-    G.W = r.width; G.H = r.height;
+    const oldW = G.W, oldH = G.H;
+    G.W = r.width; G.H = r.height; G.dpr = Math.min(window.devicePixelRatio || 1, 2);
     const c = $('graphCanvas'); c.width = Math.round(G.W * G.dpr); c.height = Math.round(G.H * G.dpr);
+    if (G.fitted && (oldW !== G.W || oldH !== G.H)) { G.view.x += (G.W - oldW) / 2; G.view.y += (G.H - oldH) / 2; }
     wake();
   }
-  function fit() { G.rot = { ...HOME_ROT }; G.zoom = 1; G.lastUser = performance.now(); wake(); }
+  const sx = (x) => x * G.view.k + G.view.x, sy = (y) => y * G.view.k + G.view.y;
+  const seedR = (n) => n.r * Math.pow(Math.min(Math.max(G.view.k, 0.35), 2.6), 0.6);
 
-  // ---------- drawing ----------
-  const BG = '#16151a', BG_FAR = '#0c0b0e';                 // Graphite: soft charcoal center, darker edges
-  function focusOn(n) {
-    const sel = G.selected, hl = G.highlight;
-    return (!sel || n === sel || sel.nbr?.has(n.id)) && (hl == null || n.c1 === hl || n.c2 === hl);
-  }
-  const dotR = (n) => (0.9 + Math.sqrt(n.deg) * 0.36) * (0.55 + 0.45 * (G.density || 1)) * Math.max(0.6, n.s) * Math.min(1.8, 0.85 + G.zoom * 0.15);
-
-  function draw(now) {
-    G.frames = (G.frames || 0) + 1;
-    const c = $('graphCanvas'), g = c.getContext('2d'), d = G.dpr, P = projector();
-    const sel = G.selected, hl = G.highlight, dimming = !!sel || hl != null;
-    // Background + a faint glow over each brain region (Graphite lighting). It's all soft,
-    // so it's painted into a small layer and stretched: cheap even while the brain turns.
-    const S = 4, L = G.sky || (G.sky = document.createElement('canvas'));
-    const lw = Math.max(1, Math.ceil(G.W / S)), lh = Math.max(1, Math.ceil(G.H / S));
-    if (L.width !== lw || L.height !== lh) { L.width = lw; L.height = lh; }
-    const q = L.getContext('2d');
-    q.globalCompositeOperation = 'source-over';
-    const bg = q.createRadialGradient(lw / 2, lh / 2, 0, lw / 2, lh / 2, Math.max(lw, lh) * 0.75);
-    bg.addColorStop(0, BG); bg.addColorStop(0.55, BG); bg.addColorStop(1, BG_FAR);
-    q.fillStyle = bg; q.fillRect(0, 0, lw, lh);
-    q.globalCompositeOperation = 'lighter';
-    const scale = Math.min(G.W, G.H * 1.15) * 0.36 * G.zoom;
-    for (const [id, R] of G.anchors) {
-      for (const sx of (R.mirror ? [1, -1] : [1])) {
-        const pr = P({ x: R.c.x * sx, y: R.c.y, z: R.c.z });
-        const rad = R.r * G.spread * scale * 1.4 * pr.s / S;
-        const depthFade = Math.max(0.25, 1 - pr.depth * 0.55);
-        const on = hl == null || hl === id;
-        const al = (hl === id ? 0.2 : 0.075) * depthFade * (on ? 1 : 0.3);
-        const col = hex2rgb(R.color), gr = q.createRadialGradient(pr.sx / S, pr.sy / S, 0, pr.sx / S, pr.sy / S, rad);
-        gr.addColorStop(0, rgba(col, al)); gr.addColorStop(0.55, rgba(col, al * 0.45)); gr.addColorStop(1, rgba(col, 0));
-        q.fillStyle = gr; q.beginPath(); q.arc(pr.sx / S, pr.sy / S, rad, 0, 6.2832); q.fill();
-      }
-    }
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.globalCompositeOperation = 'copy'; g.globalAlpha = 1; g.imageSmoothingEnabled = true;
-    g.drawImage(L, 0, 0, lw * S * d, lh * S * d);
+  function draw() {
+    const c = $('graphCanvas'), g = c.getContext('2d'), d = G.dpr, k = G.view.k;
     g.setTransform(d, 0, 0, d, 0, 0);
-    g.globalCompositeOperation = 'source-over';
+    g.clearRect(0, 0, G.W, G.H);
+    const focus = focusSet();
+    const dimAll = !!(focus || G.matches);
+    const pad = 40;
+    const inView = (n) => { const x = sx(n.x), y = sy(n.y); return x > -pad && x < G.W + pad && y > -pad && y < G.H + pad; };
 
-    // project every thought (plus any drag offset)
-    for (const n of G.nodes) { const q = P(n.p); n.sx = q.sx + n.ox; n.sy = q.sy + n.oy; n.z = q.z; n.s = q.s; n.depth = q.depth; }
-
-    // 1. brain dust: the shape, as a faint twinkling cloud (grouped by brightness = fast)
-    if (G.showDust) {
-      const t = REDUCED ? 0 : now * 0.0005, buckets = new Map();
-      for (const p of DUST_POINTS) {
-        const q = P(p);
-        const tw = 0.65 + 0.35 * Math.sin(t * p.tf + p.tp);
-        const a = (1 - q.depth) * (q.z > 0 ? 0.2 : 0.36) * tw * (dimming ? 0.6 : 1);
-        const b = Math.max(0, Math.min(7, Math.round(a * 20)));
-        if (!b) continue;
-        const key = (p.key || '214,206,192') + '|' + b;
-        let path = buckets.get(key); if (!path) buckets.set(key, path = new Path2D());
-        const r = q.z > 0 ? 0.8 : 1.05;
-        path.rect(q.sx - r, q.sy - r, r * 2, r * 2);     // tiny squares: look the same, cheaper
-      }
-      g.globalCompositeOperation = 'lighter';
-      for (const [key, path] of buckets) { const [cs, b] = key.split('|'); g.fillStyle = `rgba(${cs},${b / 20})`; g.fill(path); }
-      g.globalCompositeOperation = 'source-over';
+    // garden beds: a soft wash of colour behind each topic
+    for (const cl of G.cById.values()) {
+      if (G.hidden.has(cl.id) || !cl.size) continue;
+      const x = sx(cl.cx), y = sy(cl.cy), rr = (60 + Math.sqrt(cl.size) * 26) * k;
+      const grad = g.createRadialGradient(x, y, 0, x, y, rr);
+      grad.addColorStop(0, rgba(cl.rgb, 0.13)); grad.addColorStop(0.7, rgba(cl.rgb, 0.05)); grad.addColorStop(1, rgba(cl.rgb, 0));
+      g.fillStyle = grad; g.beginPath(); g.arc(x, y, rr, 0, Math.PI * 2); g.fill();
     }
 
-    // 2. links: soft curves through the inside of the brain (grouped by color = fast)
-    const groups = new Map(), lit = new Path2D(); let litN = 0, drawn = 0;
+    // branches (links)
+    g.lineCap = 'round';
     for (const e of G.edges) {
-      const isLit = sel && (e.a === sel.id || e.b === sel.id);
-      if (!isLit && G.strongOnly && e.w < STRONG) continue;
-      if (!isLit && drawn >= MAX_EDGES) continue;
+      if (!edgeShown(e)) continue;
       const a = G.byId.get(e.a), b = G.byId.get(e.b);
-      if (!isLit && dimming && !(focusOn(a) && focusOn(b))) continue;
-      const ctrl = P({ x: (a.p.x + b.p.x) * 0.35, y: (a.p.y + b.p.y) * 0.35, z: (a.p.z + b.p.z) * 0.35 });
-      const cxs = ctrl.sx + (a.ox + b.ox) / 2, cys = ctrl.sy + (a.oy + b.oy) / 2;
-      if (isLit) { lit.moveTo(a.sx, a.sy); lit.quadraticCurveTo(cxs, cys, b.sx, b.sy); litN++; continue; }
-      const far = (a.z + b.z) / 2 > 0;
-      const al = (far ? 0.06 : 0.15) * (a.c1 === b.c1 ? 1 : 1.5) * (dimming ? 0.7 : 1);
-      const key = mix(a.dot, b.dot, 0.5).join(',') + '|' + Math.round(al * 40);
-      let path = groups.get(key); if (!path) groups.set(key, path = new Path2D());
-      path.moveTo(a.sx, a.sy); path.quadraticCurveTo(cxs, cys, b.sx, b.sy);
-      drawn++;
-    }
-    g.lineWidth = 0.7; g.lineCap = 'round';
-    for (const [key, path] of groups) { const [cs, al] = key.split('|'); g.strokeStyle = `rgba(${cs},${Number(al) / 40})`; g.stroke(path); }
-    if (litN) { g.strokeStyle = rgba(mix(sel.dot, WHITE, 0.3), 0.85); g.lineWidth = 1.2; g.stroke(lit); }
-
-    // 3. sparks travelling along links (a living feel)
-    if (!REDUCED && G.signals.length) {
-      g.globalCompositeOperation = 'lighter';
-      for (const s of G.signals) {
-        const p = (now - s.born) / s.dur; if (p < 0 || p > 1) continue;
-        const env = Math.sin(p * Math.PI), A = s.a.p, B = s.b.p;
-        const m = { x: (A.x + B.x) * 0.35, y: (A.y + B.y) * 0.35, z: (A.z + B.z) * 0.35 };
-        for (let i = 0; i < 5; i++) {
-          const t = Math.max(0, p - i * 0.035), mt = 1 - t;
-          const q = P({ x: mt * mt * A.x + 2 * mt * t * m.x + t * t * B.x, y: mt * mt * A.y + 2 * mt * t * m.y + t * t * B.y, z: mt * mt * A.z + 2 * mt * t * m.z + t * t * B.z });
-          g.fillStyle = rgba(mix(s.a.dot, s.b.dot, t), (1 - i / 5) * env * 0.9);
-          g.beginPath(); g.arc(q.sx, q.sy, (1.4 - i * 0.18) * Math.max(0.6, q.s), 0, 6.2832); g.fill();
-        }
-      }
-      g.globalCompositeOperation = 'source-over';
+      const ax = sx(a.x), ay = sy(a.y), bx = sx(b.x), by = sy(b.y);
+      if ((ax < -pad && bx < -pad) || (ax > G.W + pad && bx > G.W + pad) || (ay < -pad && by < -pad) || (ay > G.H + pad && by > G.H + pad)) continue;
+      const mx = (ax + bx) / 2, my = (ay + by) / 2, dx = bx - ax, dy = by - ay;
+      const cx = mx - dy * e.bend, cy = my + dx * e.bend;
+      const lit = focus ? (focus.has(a.id) && focus.has(b.id) && (a.id === (G.selected || G.hover).id || b.id === (G.selected || G.hover).id))
+        : G.matches ? (G.matches.has(a.id) || G.matches.has(b.id)) : true;
+      const same = a.c1 === b.c1, col = same && G.cById.get(a.c1) ? G.cById.get(a.c1).rgb : null;
+      const base = (0.22 + (e.w - 0.5) * 0.9);
+      const alpha = lit ? (dimAll ? 0.85 : Math.max(0.16, base)) : 0.06;
+      g.strokeStyle = col ? rgba(darken(col, 0.1), alpha) : BRANCH + (alpha * 0.85) + ')';
+      g.lineWidth = (0.7 + Math.max(0, e.w - 0.5) * 3.2) * Math.min(1.8, Math.max(0.6, Math.sqrt(k))) * (lit && dimAll ? 1.5 : 1);
+      g.beginPath(); g.moveTo(ax, ay); g.quadraticCurveTo(cx, cy, bx, by); g.stroke();
     }
 
-    // 4. thoughts: back half first, then front half. Within each half, dots are drawn in batches
-    // by color + brightness (fast even with thousands): small halo, colored dot, white core.
-    const crowded = (G.density || 1) < 0.6;
-    for (const front of [false, true]) {
-      const discs = new Map(), cores = new Map(), hubs = new Path2D(); let hubA = 0;
-      g.globalCompositeOperation = 'lighter';
-      for (const n of G.nodes) {
-        if ((n.z <= 0) !== front) continue;
-        if (n.sx < -20 || n.sy < -20 || n.sx > G.W + 20 || n.sy > G.H + 20) continue;
-        const fade = Math.max(0.35, 1 - n.depth * 0.7) * n.bright;
-        const a = Math.min(1, focusOn(n) ? fade : fade * 0.14);
-        const r = dotR(n) * (n === sel ? 1.5 : 1);
-        n.r = r; n.a = a;
-        if (r > 1.3 && (!crowded || n.hub)) {
-          g.globalAlpha = Math.min(1, a * 0.9 * (G.density || 1) ** 1.5);   // halos fade in a crowd
-          g.drawImage(haloSprite(n.dot), n.sx - r * 2.6, n.sy - r * 2.6, r * 5.2, r * 5.2);
-        }
-        const ab = Math.max(1, Math.round(a * 10));
-        const dk = n.dot.join(',') + '|' + ab;
-        let dp = discs.get(dk); if (!dp) discs.set(dk, dp = new Path2D());
-        dp.moveTo(n.sx + r, n.sy); dp.arc(n.sx, n.sy, r, 0, 6.2832);
-        let cp = cores.get(ab); if (!cp) cores.set(ab, cp = new Path2D());
-        const cr = Math.max(0.6, r * 0.45); cp.moveTo(n.sx + cr, n.sy); cp.arc(n.sx, n.sy, cr, 0, 6.2832);
-        if (n.hub && a > 0.3) {
-          hubA = Math.max(hubA, a);
-          hubs.moveTo(n.sx + r + 3.5, n.sy); hubs.arc(n.sx, n.sy, r + 3.5, 0, 6.2832);
-          hubs.moveTo(n.sx - r * 3.4 - 4, n.sy); hubs.lineTo(n.sx - r - 5, n.sy); hubs.moveTo(n.sx + r + 5, n.sy); hubs.lineTo(n.sx + r * 3.4 + 4, n.sy);
-          hubs.moveTo(n.sx, n.sy - r * 3.4 - 4); hubs.lineTo(n.sx, n.sy - r - 5); hubs.moveTo(n.sx, n.sy + r + 5); hubs.lineTo(n.sx, n.sy + r * 3.4 + 4);
-        }
-      }
-      g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
-      for (const [k, dp] of discs) { const [cs, ab] = k.split('|'); g.fillStyle = `rgba(${cs},${ab / 10 * 0.93})`; g.fill(dp); }
-      for (const [ab, cp] of cores) { g.fillStyle = `rgba(255,255,255,${ab / 10})`; g.fill(cp); }
-      if (hubA) { g.strokeStyle = `rgba(220,214,200,${0.45 * hubA})`; g.lineWidth = 0.7; g.stroke(hubs); }
-    }
-    for (const n of G.nodes) {                         // a ring flashes on brand-new thoughts
-      if (!n.pulse) continue;
-      const p = (now - n.pulse) / 2400;
-      if (p >= 1) { n.pulse = 0; continue; }
-      g.strokeStyle = rgba(n.dot, (1 - p) * 0.9); g.lineWidth = 1.4; g.beginPath(); g.arc(n.sx, n.sy, (n.r || 2) + p * 26, 0, 6.2832); g.stroke();
-    }
-    if (sel) {
-      g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 1.3;
-      g.beginPath(); g.arc(sel.sx, sel.sy, dotR(sel) * 1.5 + 4, 0, 6.2832); g.stroke();
-    }
-  }
-
-  // ---------- animation loop ----------
-  function physics() {                               // dragged dots spring back (with a little wobble)
-    let moving = false;
+    // seeds (thoughts)
+    const labels = [];
     for (const n of G.nodes) {
-      if (G.drag && G.drag.node === n) continue;
-      if (!n.ox && !n.oy && !n.vx && !n.vy) continue;
-      n.vx = (n.vx - n.ox * 0.12) * 0.8; n.vy = (n.vy - n.oy * 0.12) * 0.8;
-      n.ox += n.vx; n.oy += n.vy;
-      if (Math.abs(n.ox) + Math.abs(n.oy) + Math.abs(n.vx) + Math.abs(n.vy) < 0.05) { n.ox = n.oy = n.vx = n.vy = 0; } else moving = true;
+      if (!shown(n) || !inView(n)) continue;
+      const cl = G.cById.get(n.c1), rgb = cl ? cl.rgb : [138, 120, 100];
+      const x = sx(n.x), y = sy(n.y), r = seedR(n);
+      const lit = focus ? focus.has(n.id) : G.matches ? G.matches.has(n.id) : true;
+      g.globalAlpha = lit ? 1 : 0.2;
+      g.save(); g.translate(x, y); g.rotate(n.rot);
+      if (n.hub && r > 3) {                         // a little sprout on the busiest seeds
+        g.strokeStyle = rgba([95, 122, 58], 0.9); g.lineWidth = Math.max(1, r * 0.18);
+        g.beginPath(); g.moveTo(0, -r * 0.6); g.quadraticCurveTo(r * 0.3, -r * 1.3, 0, -r * 1.9); g.stroke();
+        g.fillStyle = rgba([110, 140, 66], 0.95);
+        g.beginPath(); g.moveTo(0, -r * 1.6); g.quadraticCurveTo(r * 0.9, -r * 2.2, r * 1.2, -r * 1.5); g.quadraticCurveTo(r * 0.5, -r * 1.2, 0, -r * 1.6); g.fill();
+      }
+      g.fillStyle = rgba(rgb, 1);
+      g.beginPath(); g.ellipse(0, 0, r, r * 0.74, 0, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = rgba(darken(rgb, 0.35), 0.9); g.lineWidth = Math.max(0.8, r * 0.12); g.stroke();
+      if (r > 3.5) {                                 // the seed's groove and a soft shine
+        g.strokeStyle = rgba(darken(rgb, 0.3), 0.55); g.lineWidth = Math.max(0.6, r * 0.09);
+        g.beginPath(); g.moveTo(-r * 0.62, 0); g.quadraticCurveTo(0, r * 0.18, r * 0.62, 0); g.stroke();
+        g.fillStyle = rgba(lighten(rgb, 0.55), 0.55);
+        g.beginPath(); g.ellipse(-r * 0.28, -r * 0.3, r * 0.32, r * 0.16, -0.4, 0, Math.PI * 2); g.fill();
+      }
+      g.restore();
+      const isFocus = n === G.selected || n === G.hover;
+      if (isFocus || (G.matches && G.matches.has(n.id))) {
+        g.globalAlpha = 1; g.strokeStyle = isFocus ? INK : rgba([176, 125, 30], 1); g.lineWidth = 2;
+        g.setLineDash(isFocus ? [] : [3, 3]);
+        g.beginPath(); g.arc(x, y, r + 5, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+      }
+      if (lit && (isFocus || (k > 1.7 && r > 4) || (G.matches && G.matches.has(n.id) && G.matches.size <= 12))) labels.push([n, x, y, r]);
+      g.globalAlpha = 1;
     }
-    return moving;
+
+    // topic names, in the garden's serif
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (const cl of G.cById.values()) {
+      if (G.hidden.has(cl.id) || !cl.size) continue;
+      const fs = Math.max(13, Math.min(22, 15 * Math.sqrt(k)));
+      g.font = `italic 600 ${fs}px Fraunces, Georgia, serif`;
+      const x = sx(cl.cx), y = sy(cl.cy) - (34 + Math.sqrt(cl.size) * 16) * k - 6;
+      g.lineWidth = 4; g.strokeStyle = 'rgba(250, 244, 232, 0.92)'; g.strokeText(cl.name, x, y);
+      g.fillStyle = rgba(darken(cl.rgb, 0.35), dimAll ? 0.55 : 1); g.fillText(cl.name, x, y);
+    }
+    // seed labels (only when zoomed in, or for search matches)
+    g.textAlign = 'left'; g.font = '600 12px "Nunito Sans", system-ui, sans-serif';
+    for (const [n, x, y, r] of labels.slice(0, 70)) {
+      const t = n.label.length > 38 ? n.label.slice(0, 37) + '…' : n.label;
+      g.lineWidth = 3.5; g.strokeStyle = 'rgba(250, 244, 232, 0.95)'; g.strokeText(t, x + r + 6, y);
+      g.fillStyle = INK; g.fillText(t, x + r + 6, y);
+    }
   }
 
   function frame(now) {
     G.raf = 0;
-    if (!G.visible) return;
-    const dt = Math.min(50, now - (G.lastFrame || now));
-    const spinning = !REDUCED && !G.drag && !G.pinch && now - G.lastUser < SPIN_MS;
-    const moving = physics();
-    // A slow idle spin only needs ~24 frames a second (like Brain Atlas's phone mode); touching it runs at full speed.
-    if (spinning && !moving && !G.turnTo && now - G.lastFrame < 40) { G.raf = requestAnimationFrame(frame); return; }
-    G.lastFrame = now;
-    if (spinning && !G.turnTo) G.rot.y += dt * 0.00011 * (1 - Math.min(1, (now - G.lastUser) / SPIN_MS) * 0.7);
-    if (G.turnTo) {                                    // turning to face a tapped thought
-      const p = Math.min(1, (now - G.turnTo.t0) / 500), e = 1 - Math.pow(1 - p, 3);
-      G.rot.y = G.turnTo.from.y + G.turnTo.dy * e; G.rot.x = G.turnTo.from.x + (G.turnTo.x - G.turnTo.from.x) * e;
-      if (p >= 1) G.turnTo = null;
+    if (G.tween) {
+      const t = Math.min(1, (now - G.tween.t0) / G.tween.ms), e = 1 - Math.pow(1 - t, 3);
+      const a = G.tween.from, b = G.tween.to;
+      G.view = { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e, k: a.k + (b.k - a.k) * e };
+      G.dirty = true;
+      if (t >= 1) G.tween = null;
     }
-    if (!REDUCED && spinning && now - G.lastSpark > 900 && G.edges.length) {   // a spark about every second
-      const e = G.edges[Math.floor(Math.random() * Math.min(G.edges.length, 300))];
-      G.signals.push({ a: G.byId.get(e.a), b: G.byId.get(e.b), born: now, dur: 1600 }); G.lastSpark = now;
-    }
-    G.signals = G.signals.filter(s => now - s.born < s.dur);
-    draw(now);
-    const busy = spinning || moving || G.drag || G.pinch || G.turnTo || G.signals.length || G.nodes.some(n => n.pulse);
-    if (busy) G.raf = requestAnimationFrame(frame);
+    if (G.dirty) { G.dirty = false; draw(); positionCard(); }
+    if (G.tween) G.raf = requestAnimationFrame(frame);
   }
-  function wake() { if (G.visible && !G.raf && G.W) G.raf = requestAnimationFrame(frame); }
+  function wake() { G.dirty = true; if (!G.raf && G.visible) G.raf = requestAnimationFrame(frame); }
 
-  // ---------- touch: turn, pinch, drag a dot, tap ----------
-  const ptrs = new Map();
-  function local(e) { const r = $('graphCanvas').getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
-  function hit(sx, sy) {
-    let best = null, bd = Infinity;
-    for (const n of G.nodes) {
-      if (n.sx === undefined) continue;
-      const d = Math.hypot(n.sx - sx, n.sy - sy);
-      if (d < 22 && d + n.z * 6 < bd) { bd = d + n.z * 6; best = n; }   // 44px finger target; nearer dots win
-    }
-    return best;
+  // ---------- camera ----------
+  function animateTo(to, ms = 380) {
+    if (REDUCED) { G.view = to; G.tween = null; wake(); return; }
+    G.tween = { t0: performance.now(), ms, from: { ...G.view }, to }; wake();
   }
-  function onDown(e) {
-    $('graphCanvas').setPointerCapture(e.pointerId);
-    const [sx, sy] = local(e);
-    ptrs.set(e.pointerId, { sx, sy, x0: sx, y0: sy, t0: performance.now() });
-    G.lastUser = performance.now(); G.turnTo = null;
-    if (ptrs.size === 2) {
-      G.drag = null;
-      const [p, q] = [...ptrs.values()];
-      G.pinch = { d0: Math.hypot(p.sx - q.sx, p.sy - q.sy), z0: G.zoom };
-      return;
-    }
-    const n = hit(sx, sy);
-    G.drag = n ? { node: n } : { rot: { ...G.rot } };
-    wake();
+  function zoomAt(px, py, f, animate) {
+    const k = Math.max(K_MIN, Math.min(K_MAX, G.view.k * f));
+    const wx = (px - G.view.x) / G.view.k, wy = (py - G.view.y) / G.view.k;
+    const to = { k, x: px - wx * k, y: py - wy * k };
+    if (animate) animateTo(to, 220); else { G.view = to; wake(); }
   }
-  function onMove(e) {
-    const p = ptrs.get(e.pointerId); if (!p) return;
-    [p.sx, p.sy] = local(e);
-    G.lastUser = performance.now();
-    if (G.pinch && ptrs.size >= 2) {
-      const [a, b] = [...ptrs.values()];
-      G.zoom = Math.max(0.6, Math.min(5, G.pinch.z0 * Math.hypot(a.sx - b.sx, a.sy - b.sy) / G.pinch.d0));
-      wake(); return;
-    }
-    if (!G.drag) return;
-    const dx = p.sx - p.x0, dy = p.sy - p.y0;
-    if (G.drag.node) {                                // pull the dot; linked dots follow a little
-      const n = G.drag.node; n.ox = dx; n.oy = dy; n.vx = n.vy = 0;
-      for (const e2 of G.edges) {
-        if (e2.w < 0.6) continue;
-        const m = e2.a === n.id ? G.byId.get(e2.b) : e2.b === n.id ? G.byId.get(e2.a) : null;
-        if (m) { m.ox = dx * 0.3; m.oy = dy * 0.3; m.vx = m.vy = 0; }
-      }
-    } else if (G.drag.rot) {                          // turn the brain
-      G.rot.y = G.drag.rot.y - dx / 180;
-      G.rot.x = Math.max(-1.4, Math.min(1.4, G.drag.rot.x - dy / 180));
-    }
-    wake();
+  function frameNodes(list, animate, maxK = 2.4) {
+    if (!list.length || !G.W) return;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const n of list) { x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x); y1 = Math.max(y1, n.y); }
+    const padX = 60, padY = 70;
+    const k = Math.max(K_MIN, Math.min(maxK, Math.min((G.W - padX * 2) / Math.max(1, x1 - x0), (G.H - padY * 2) / Math.max(1, y1 - y0))));
+    const to = { k, x: G.W / 2 - ((x0 + x1) / 2) * k, y: G.H / 2 - ((y0 + y1) / 2) * k + 8 };
+    if (animate) animateTo(to); else { G.view = to; wake(); }
   }
-  function onUp(e) {
-    const p = ptrs.get(e.pointerId); ptrs.delete(e.pointerId);
-    if (ptrs.size < 2) G.pinch = null;
-    if (!p) return;
-    const moved = Math.hypot(p.sx - p.x0, p.sy - p.y0), quick = performance.now() - p.t0 < 400;
-    const d = G.drag; G.drag = null;
-    G.lastUser = performance.now();
-    if (moved < 8 && quick && ptrs.size === 0) select(d && d.node ? d.node : null);
-    wake();                                           // let go: dots spring back, the brain keeps turning a bit
+  function fit(animate = true) {
+    const list = G.nodes.filter(shown);
+    frameNodes(list.length ? list : G.nodes, animate, 1.6);
   }
 
-  // ---------- a thought ----------
-  function turnToFace(p) {                           // rotate so this point faces you
-    const target = Math.atan2(p.x, -p.z);
-    let dy = target - G.rot.y; dy = ((dy + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
-    G.turnTo = { t0: performance.now(), from: { ...G.rot }, dy, x: Math.max(-0.6, Math.min(0.6, -p.y * 0.5)) };
-    G.lastUser = performance.now();
-    wake();
+  // ---------- hover / tap preview card ----------
+  function topicName(n) { const c = G.cById.get(n.c1); return c ? c.name : 'No topic yet'; }
+  function showCard(n, touch) {
+    const card = $('graphCard');
+    G.card = n ? { n, touch } : null;
+    if (!n) { card.hidden = true; return; }
+    const c = G.cById.get(n.c1);
+    card.innerHTML = `<div class="gc-top"><span class="gs-dot" style="background:${c ? rgba(c.rgb, 1) : '#8A7864'}"></span><span class="gc-topic">${esc(topicName(n))}</span></div>
+      <div class="gc-title">${esc(n.label.length > 120 ? n.label.slice(0, 119) + '…' : n.label)}</div>
+      <div class="gc-meta">${n.deg} ${n.deg === 1 ? 'connection' : 'connections'} · ${esc(new Date(n.at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }))}</div>
+      ${touch ? `<button type="button" class="gc-open" data-gc-open="${esc(n.id)}">Open thought</button>` : '<div class="gc-hint">Click to open</div>'}`;
+    card.hidden = false;
+    card.classList.toggle('touch', !!touch);
+    positionCard();
   }
-  function select(n) {
+  function positionCard() {
+    const card = $('graphCard');
+    if (!G.card || card.hidden) return;
+    const n = G.card.n;
+    if (!shown(n)) { showCard(null); return; }
+    const x = sx(n.x), y = sy(n.y), r = seedR(n);
+    const w = card.offsetWidth, h = card.offsetHeight;
+    let left = x + r + 12, top = y - h / 2;
+    if (left + w > G.W - 8) left = x - r - 12 - w;
+    if (left < 8) { left = Math.max(8, Math.min(G.W - w - 8, x - w / 2)); top = y + r + 12; if (top + h > G.H - 60) top = y - r - 12 - h; }
+    top = Math.max(8, Math.min(G.H - h - 8, top));
+    card.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+  }
+
+  // ---------- the full thought (bottom sheet) ----------
+  function select(n, { center } = {}) {
     G.selected = n;
     const sheet = $('graphSheet');
     if (!n) { sheet.classList.remove('open'); sheet.setAttribute('aria-hidden', 'true'); wake(); return; }
-    n.nbr = new Map();
-    for (const e of G.edges) { if (e.a === n.id) n.nbr.set(e.b, e.w); if (e.b === n.id) n.nbr.set(e.a, e.w); }
-    const c1 = G.cById.get(n.c1), c2 = G.cById.get(n.c2);
-    const area = G.anchors.get(n.c1)?.area;
-    const topic = c1 ? `${esc(c1.name)}${area ? ` <span style="color:var(--muted); font-weight:500;">· ${esc(area)}</span>` : ''}${c2 && n.w > 0.2 ? ` <span style="color:var(--muted)">· between ${esc(c1.name)} and ${esc(c2.name)}</span>` : ''}` : 'No topic yet';
-    const near = [...n.nbr.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => G.byId.get(id)).filter(Boolean);
+    showCard(null);
+    const nbr = new Map();
+    for (const e of G.edges) { if (e.a === n.id) nbr.set(e.b, e.w); if (e.b === n.id) nbr.set(e.a, e.w); }
+    const c1 = G.cById.get(n.c1);
+    const near = [...nbr.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id]) => G.byId.get(id)).filter(Boolean);
     sheet.innerHTML = `
-      <div class="gs-top"><span class="gs-dot" style="background:${rgba(n.dot, 1)}"></span>
-        <span class="gs-topic">${topic}</span>
+      <div class="gs-top"><span class="gs-dot" style="background:${c1 ? rgba(c1.rgb, 1) : '#8A7864'}"></span>
+        <span class="gs-topic">${esc(topicName(n))}</span>
         <button class="secondary icon-btn gs-close" type="button" aria-label="Close" data-gs-close="1">
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-      <div class="gs-date">${esc(new Date(n.at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }))}${n.cat ? ' · ' + esc(n.cat) : ''} · ${n.deg} ${n.deg === 1 ? 'link' : 'links'}</div>
+      <div class="gs-date">${esc(new Date(n.at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }))}${n.cat ? ' · ' + esc(n.cat) : ''} · ${n.deg} ${n.deg === 1 ? 'connection' : 'connections'}</div>
       <div class="gs-text" id="gsText">${esc(n.label)}</div>
       <button type="button" data-gs-open="${esc(n.id)}" style="width:100%; margin-top:12px;">Read the full thought</button>
-      ${near.length ? `<div class="gs-near-title">Connected</div>${near.map(m => `
-        <button type="button" class="gs-near" data-gs-jump="${esc(m.id)}"><span class="gs-dot" style="background:${rgba(m.dot, 1)}"></span><span>${esc(m.label)}</span></button>`).join('')}` : ''}`;
+      ${near.length ? `<div class="gs-near-title">Connected</div>${near.map(m => {
+        const cm = G.cById.get(m.c1);
+        return `<button type="button" class="gs-near" data-gs-jump="${esc(m.id)}"><span class="gs-dot" style="background:${cm ? rgba(cm.rgb, 1) : '#8A7864'}"></span><span>${esc(m.label)}</span></button>`; }).join('')}` : ''}`;
     sheet.classList.add('open'); sheet.setAttribute('aria-hidden', 'false'); sheet.scrollTop = 0;
-    turnToFace(n.p);
+    if (center) {
+      const k = Math.max(G.view.k, 1.1);
+      animateTo({ k, x: G.W / 2 - n.x * k, y: G.H * 0.3 - n.y * k });
+    }
+    wake();
   }
   async function openFull(id) {
     const box = $('gsText'), btn = document.querySelector('[data-gs-open]');
@@ -563,46 +384,176 @@
       box.classList.add('full'); btn.remove();
     } catch (err) { btn.disabled = false; btn.textContent = 'Could not open it. Try again'; }
   }
-  function jumpTo(id) { const n = G.byId.get(id); if (n) select(n); }
 
-  // ---------- topic list under the map ----------
-  function renderLegend() {
-    const el = $('graphLegend');
-    el.innerHTML = G.clusters.slice().sort((a, b) => (b.size || 0) - (a.size || 0)).map(c => `
-      <button type="button" class="chip legend-chip ${G.highlight === c.id ? 'active' : ''}" data-topic="${c.id}" aria-pressed="${G.highlight === c.id}">
-        <span class="gs-dot" style="background:${rgba(G.cById.get(c.id).rgb, 1)}"></span>${esc(c.name)}</button>`).join('');
+  // ---------- search ----------
+  function applySearch(focusIt) {
+    const q = G.query.trim().toLowerCase();
+    const out = $('graphSearchCount');
+    if (!q) { G.matches = null; if (out) out.textContent = ''; wake(); return; }
+    const words = q.split(/\s+/).filter(Boolean);
+    const list = G.nodes.filter(n => { const t = (n.label + ' ' + (n.cat || '') + ' ' + topicName(n)).toLowerCase(); return words.every(w => t.includes(w)); });
+    G.matches = new Set(list.map(n => n.id));
+    const vis = list.filter(shown);
+    if (out) out.textContent = list.length
+      ? `${list.length} ${list.length === 1 ? 'thought matches' : 'thoughts match'}${vis.length < list.length ? ` (${list.length - vis.length} hidden by filters)` : ''}`
+      : 'No thoughts match that.';
+    if (focusIt && vis.length) frameNodes(vis, true, 2.4);
+    wake();
   }
 
+  // ---------- filters ----------
+  function renderLegend() {
+    const el = $('graphLegend');
+    const list = [...G.cById.values()].filter(c => c.size).sort((a, b) => b.size - a.size);
+    el.innerHTML = list.map(c => `
+      <button type="button" class="chip legend-chip ${G.hidden.has(c.id) ? 'off' : 'active'}" data-topic="${c.id}" aria-pressed="${!G.hidden.has(c.id)}">
+        <span class="gs-dot" style="background:${rgba(c.rgb, 1)}"></span>${esc(c.name)} <span class="legend-n">${c.size}</span></button>`).join('') +
+      (G.hidden.size ? '<button type="button" class="chip legend-all" data-topic-all="1">Show all</button>' : '');
+  }
+  function setMinDeg(v) {
+    G.minDeg = Math.max(0, Number(v) || 0);
+    const s = $('graphMinLinks'), o = $('graphMinOut');
+    if (s && Number(s.value) !== G.minDeg) s.value = String(G.minDeg);
+    if (o) o.textContent = String(G.minDeg);
+    afterFilter();
+  }
+  function afterFilter() {
+    if (G.selected && !shown(G.selected)) select(null);
+    if (G.hover && !shown(G.hover)) G.hover = null;
+    if (G.card && !shown(G.card.n)) showCard(null);
+    const vis = G.nodes.filter(shown).length;
+    $('graphStatus').textContent = G.nodes.length && !vis ? 'Nothing matches these filters.' : '';
+    applySearch(false);
+    renderLegend();
+    wake();
+  }
+
+  // ---------- pointer input ----------
+  function local(e) { const r = $('graphCanvas').getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  function hit(px, py, slop) {
+    let best = null, bd = Infinity;
+    for (const n of G.nodes) {
+      if (!shown(n)) continue;
+      const d = Math.hypot(sx(n.x) - px, sy(n.y) - py), r = seedR(n) + slop;
+      if (d < r && d < bd) { bd = d; best = n; }
+    }
+    return best;
+  }
+  function onDown(e) {
+    const c = $('graphCanvas');
+    try { c.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    const [x, y] = local(e);
+    G.pointers.set(e.pointerId, { x, y });
+    G.tween = null;
+    if (G.pointers.size === 1) G.drag = { x, y, vx: G.view.x, vy: G.view.y, moved: false, type: e.pointerType };
+    if (G.pointers.size === 2) {
+      const [a, b] = [...G.pointers.values()];
+      G.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+      if (G.drag) G.drag.moved = true;
+    }
+    c.classList.add('grabbing');
+  }
+  function onMove(e) {
+    const [x, y] = local(e);
+    if (G.pointers.has(e.pointerId)) G.pointers.set(e.pointerId, { x, y });
+    if (G.pinch && G.pointers.size >= 2) {
+      const [a, b] = [...G.pointers.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      zoomAt(mx, my, d / G.pinch.d);
+      G.view.x += mx - G.pinch.mx; G.view.y += my - G.pinch.my;
+      G.pinch = { d, mx, my }; wake();
+      return;
+    }
+    if (G.drag && G.pointers.size === 1) {
+      const dx = x - G.drag.x, dy = y - G.drag.y;
+      if (!G.drag.moved && Math.hypot(dx, dy) > 6) { G.drag.moved = true; if (G.card && G.card.touch) showCard(null); }
+      if (G.drag.moved) { G.view.x = G.drag.vx + dx; G.view.y = G.drag.vy + dy; wake(); }
+      return;
+    }
+    if (e.pointerType === 'mouse' && !G.pointers.size) {
+      const n = hit(x, y, 4);
+      if (n !== G.hover) {
+        G.hover = n; showCard(n, false);
+        $('graphCanvas').style.cursor = n ? 'pointer' : '';
+        wake();
+      }
+    }
+  }
+  function onUp(e) {
+    const [x, y] = local(e);
+    const drag = G.drag;
+    G.pointers.delete(e.pointerId);
+    if (G.pointers.size < 2) G.pinch = null;
+    if (G.pointers.size === 1) { const [p] = [...G.pointers.values()]; G.drag = { x: p.x, y: p.y, vx: G.view.x, vy: G.view.y, moved: true }; return; }
+    G.drag = null;
+    $('graphCanvas').classList.remove('grabbing');
+    if (!drag || drag.moved || e.type === 'pointercancel') return;
+    const touch = e.pointerType !== 'mouse';
+    const n = hit(x, y, touch ? 14 : 4);
+    if (!n) { showCard(null); G.hover = null; if (G.selected) select(null); wake(); return; }
+    if (touch) {
+      if (G.selected) select(null);
+      G.hover = n; showCard(n, true); wake();
+    } else select(n);
+  }
+  function onLeave() { if (G.hover && !(G.card && G.card.touch)) { G.hover = null; showCard(null); wake(); } }
+
+  // ---------- wiring ----------
   function setup() {
     const c = $('graphCanvas');
     c.addEventListener('pointerdown', onDown);
     c.addEventListener('pointermove', onMove);
     c.addEventListener('pointerup', onUp);
     c.addEventListener('pointercancel', onUp);
-    c.addEventListener('wheel', (e) => {             // trackpad / mouse zoom on a computer
+    c.addEventListener('pointerleave', onLeave);
+    c.addEventListener('wheel', (e) => {
       e.preventDefault();
-      G.zoom = Math.max(0.6, Math.min(5, G.zoom * Math.exp(-e.deltaY * 0.0015)));
-      G.lastUser = performance.now(); wake();
+      const [x, y] = local(e);
+      zoomAt(x, y, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018)));
     }, { passive: false });
-    $('graphLegend').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-topic]'); if (!b) return;
-      const id = Number(b.dataset.topic);
-      G.highlight = G.highlight === id ? null : id; renderLegend();
-      const A = G.highlight != null && G.anchors.get(id);
-      if (A) turnToFace(A.c);                       // turn the brain toward that region
-      G.lastUser = performance.now(); wake();
+    c.addEventListener('keydown', (e) => {
+      if (e.key === '+' || e.key === '=') { zoomAt(G.W / 2, G.H / 2, 1.3, true); e.preventDefault(); }
+      if (e.key === '-' || e.key === '_') { zoomAt(G.W / 2, G.H / 2, 1 / 1.3, true); e.preventDefault(); }
+      if (e.key === '0') { fit(); e.preventDefault(); }
+      const step = 60;
+      if (e.key === 'ArrowLeft') { G.view.x += step; wake(); e.preventDefault(); }
+      if (e.key === 'ArrowRight') { G.view.x -= step; wake(); e.preventDefault(); }
+      if (e.key === 'ArrowUp') { G.view.y += step; wake(); e.preventDefault(); }
+      if (e.key === 'ArrowDown') { G.view.y -= step; wake(); e.preventDefault(); }
+      if (e.key === 'Escape') { select(null); showCard(null); G.hover = null; wake(); }
     });
+    $('graphZoomIn').addEventListener('click', () => zoomAt(G.W / 2, G.H / 2, 1.4, true));
+    $('graphZoomOut').addEventListener('click', () => zoomAt(G.W / 2, G.H / 2, 1 / 1.4, true));
+    $('graphFit').addEventListener('click', () => { select(null); showCard(null); G.hover = null; fit(); });
     $('graphLinks').addEventListener('click', () => {
       G.strongOnly = !G.strongOnly;
-      $('graphLinks').textContent = G.strongOnly ? 'Strong links' : 'All links';
-      $('graphLinks').setAttribute('aria-pressed', String(!G.strongOnly)); wake();
+      $('graphLinks').textContent = G.strongOnly ? 'Strong links only' : 'All links';
+      $('graphLinks').setAttribute('aria-pressed', String(G.strongOnly)); wake();
     });
-    $('graphFit').addEventListener('click', () => { select(null); G.highlight = null; renderLegend(); fit(); });
+    $('graphLegend').addEventListener('click', (e) => {
+      if (e.target.closest('[data-topic-all]')) { G.hidden.clear(); afterFilter(); return; }
+      const b = e.target.closest('[data-topic]'); if (!b) return;
+      const id = Number(b.dataset.topic);
+      if (G.hidden.has(id)) G.hidden.delete(id); else G.hidden.add(id);
+      afterFilter();
+    });
+    $('graphMinLinks').addEventListener('input', (e) => setMinDeg(e.target.value));
+    $('graphSearch').addEventListener('input', (e) => { G.query = e.target.value; applySearch(false); });
+    $('graphSearchForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      G.query = $('graphSearch').value; applySearch(true);
+      document.activeElement && document.activeElement.blur();
+    });
+    $('graphSearch').addEventListener('search', (e) => { if (!e.target.value) { G.query = ''; applySearch(false); } });
+    $('graphCard').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-gc-open]'); if (!b) return;
+      const n = G.byId.get(b.dataset.gcOpen); if (n) select(n, { center: true });
+    });
     $('graphSheet').addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.gsClose) select(null);
       else if (b.dataset.gsOpen) openFull(b.dataset.gsOpen);
-      else if (b.dataset.gsJump) jumpTo(b.dataset.gsJump);
+      else if (b.dataset.gsJump) { const n = G.byId.get(b.dataset.gsJump); if (n) select(n, { center: true }); }
     });
     if (window.ResizeObserver) new ResizeObserver(resize).observe(c.parentElement);
     window.addEventListener('resize', resize);
@@ -611,7 +562,7 @@
   }
 
   function start() {
-    resize(); G.lastUser = performance.now(); wake();
+    resize(); wake();
     clearInterval(G.poll);
     G.poll = setInterval(() => { if (G.visible && !document.hidden) fetchGraph({ quiet: true }); }, POLL_MS);
   }
@@ -620,14 +571,16 @@
   setup();
   window.obGraph = {
     show() { G.visible = true; start(); fetchGraph(); },
-    hide() { G.visible = false; stop(); },
-    reset() {                                        // forget the current map (used by the preview page)
-      G.nodes = []; G.byId = new Map(); G.edges = []; G.selected = null; G.highlight = null; G.signals = [];
-      G.rot = { ...HOME_ROT }; G.zoom = 1;
-      $('graphSheet').classList.remove('open');
+    hide() { G.visible = false; stop(); showCard(null); },
+    reset() {                                        // forget the current map
+      G.nodes = []; G.byId = new Map(); G.edges = []; G.selected = null; G.hover = null; G.at = null; G.fitted = false;
+      G.hidden.clear(); G.minDeg = 0; G.query = ''; G.matches = null; G.view = { x: 0, y: 0, k: 1 };
+      $('graphSheet').classList.remove('open'); showCard(null);
     },
     fit,
-    _draw: (t) => draw(t),                          // for the browser test (timing)
+    zoomBy(f) { zoomAt(G.W / 2, G.H / 2, f); },
+    screenPos(id) { const n = G.byId.get(id); return n ? { x: sx(n.x), y: sy(n.y), r: seedR(n) } : null; },
+    _draw: () => draw(),                             // for the browser test (timing)
     _state: G,                                       // for the browser test
   };
 })();

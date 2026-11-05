@@ -1,34 +1,36 @@
-/* Ask answers, note editing and the Library "door check" flag (Nov 3, 2026).
+/* Ask answers, note editing and the Library "door check" flag (Nov 3, 2026; design v3 garden colours).
    Loaded from index.html after the main styles; uses the same colour variables. */
 
 /* ---------- Ask (ask.js) ---------- */
-.ask-card { border-color: var(--accent); }
-.ask-card.ask-uncovered { border-color: var(--line-2); }
+.ask-card { border-color: var(--moss); border-left: 5px solid var(--moss); background: linear-gradient(180deg, #FBFBF1, var(--surface)); }
+.ask-card .thought-content { font-family: var(--display); font-size: 17px; }
+.ask-card.ask-uncovered { border-color: var(--line-2); border-left-color: var(--clay); }
 .ask-used { margin-top: 12px; }
-.ask-sources { list-style: none; margin: 0; padding: 0; font-size: 14px; line-height: 1.45; }
-.ask-sources li { padding: 4px 0; border-top: 1px solid var(--line); }
-.ask-ref { font-weight: 700; color: #F2B35E; margin-right: 4px; }
-.ask-kind { display: inline-block; font-size: 12px; font-weight: 600; background: #22283A; color: var(--blue, #9DB4FF); border-radius: 999px; padding: 1px 8px; margin-right: 4px; }
-.ask-kind.ask-old { background: var(--accent-soft); color: #F7CB8C; }
+.ask-sources { list-style: none; margin: 0; padding: 0; font-size: 14px; line-height: 1.5; }
+.ask-sources li { padding: 6px 0; border-top: 1px dashed var(--line-2); }
+.ask-ref { font-weight: 800; color: var(--accent-text); margin-right: 4px; }
+.ask-kind { display: inline-block; font-size: 12.5px; font-weight: 700; background: var(--teal-soft); color: var(--teal); border-radius: 999px; padding: 1px 9px; margin-right: 4px; }
+.ask-kind.ask-old { background: var(--ochre-soft); color: #6E4A0B; }
 .ask-date { color: var(--muted); font-size: 13px; }
 
 /* ---------- Edit notes (edit-thought.js) ---------- */
 .et-bar { display: flex; justify-content: flex-end; margin: 4px -4px -10px 0; }
-.et-bar .linkish { min-height: 36px; font-size: 14px; }
-.et-badge { display: inline-block; font-size: 12px; font-weight: 600; background: var(--accent-soft); color: #F7CB8C; border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
-.et-editor textarea { width: 100%; min-height: 140px; margin-top: 6px; font-size: 15px; line-height: 1.45; }
-.et-check { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text); margin: 12px 0 6px; }
-.et-check input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.et-bar .linkish { min-height: 44px; font-size: 14px; }
+.et-badge { display: inline-block; font-size: 12.5px; font-weight: 700; background: var(--ochre-soft); color: #6E4A0B; border-radius: 999px; padding: 1px 9px; margin-left: 4px; }
+.et-editor textarea { width: 100%; min-height: 140px; margin-top: 6px; font-size: 16px; line-height: 1.5; }
+.et-check { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text); margin: 12px 0 6px; min-height: 44px; }
+.et-check input { width: 22px; height: 22px; margin: 0; accent-color: var(--moss); }
 .et-replace { margin: 6px 0 4px; }
 .et-results, .et-history { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.et-choice, .et-version { text-align: left; font-size: 14px; font-weight: 500; line-height: 1.4; padding: 10px 12px; min-height: 44px; display: flex; flex-direction: column; gap: 2px; }
+.et-choice, .et-version { text-align: left; font-size: 14px; font-weight: 600; line-height: 1.4; padding: 10px 12px; min-height: 44px; display: flex; flex-direction: column; gap: 2px; }
 .et-pick-row { font-size: 14px; margin-top: 8px; color: var(--muted); }
 .et-actions { display: flex; gap: 8px; margin-top: 12px; }
 .et-actions button { flex: 1; }
 .et-toast { position: fixed; left: 16px; right: 16px; bottom: calc(90px + env(safe-area-inset-bottom, 0px)); z-index: 50; max-width: 480px; margin: 0 auto;
-  background: #14301F; color: var(--ok, #6EE7A0); padding: 12px 16px; border-radius: 14px; font-size: 14px; font-weight: 600; text-align: center; }
-.et-toast.err { background: #331816; color: #FCA5A5; }
+  background: var(--ok-bg, #E4ECD3); color: var(--ok, #3B6524); border: 1px solid #C9D7B0; padding: 12px 16px; border-radius: 14px; font-size: 15px; font-weight: 700; text-align: center;
+  box-shadow: 0 10px 24px -8px rgba(70,45,20,.45); }
+.et-toast.err { background: var(--err-bg, #F7DDD4); color: var(--err, #9E3226); border-color: #EBC0B3; }
 
 /* ---------- Door check flag in the Library reader (door-flag.js) ---------- */
-.door-flag { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: var(--accent-soft); color: #F7CB8C; font-size: 14px; line-height: 1.45; }
-.door-flag .door-reasons { margin-top: 4px; font-size: 13px; color: var(--muted); }
+.door-flag { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: var(--ochre-soft); color: #5E3F08; border: 1px solid #DDBF7E; font-size: 14px; line-height: 1.5; }
+.door-flag .door-reasons { margin-top: 4px; font-size: 13px; color: #6B4D14; }

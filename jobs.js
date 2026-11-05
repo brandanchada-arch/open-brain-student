@@ -171,7 +171,7 @@ if (typeof document !== 'undefined') {
       }
       if (v.hiddenLow) html += `<div class="pl-empty">${v.hiddenLow} lower-scoring ${v.hiddenLow === 1 ? 'opening is' : 'openings are'} hidden (cutoff ${v.cutoff}, setting job_score_cutoff).</div>`;
       if (v.closed.length) {
-        html += `<details class="card"><summary style="cursor:pointer; font-size:13px; color:#999;">Closed and not interested (${v.closed.length})</summary>${v.closed.map(jobCard).join('')}</details>`;
+        html += `<details class="card"><summary style="cursor:pointer; font-size:14px; color:var(--muted);">Closed and not interested (${v.closed.length})</summary>${v.closed.map(jobCard).join('')}</details>`;
       }
     } else {
       const v = jobsBuildPipeline(shown, J.filter === 'not_interested' ? 0 : J.cutoff);
