@@ -187,7 +187,7 @@
     if (sprites.has(key)) return sprites.get(key);
     const s = document.createElement('canvas'); s.width = s.height = 64;
     const g = s.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    gr.addColorStop(0, rgba(rgb, 0.55)); gr.addColorStop(0.25, rgba(rgb, 0.22)); gr.addColorStop(0.6, rgba(rgb, 0.06)); gr.addColorStop(1, rgba(rgb, 0));
+    gr.addColorStop(0, rgba(rgb, 0.8)); gr.addColorStop(0.22, rgba(rgb, 0.38)); gr.addColorStop(0.55, rgba(rgb, 0.1)); gr.addColorStop(1, rgba(rgb, 0));
     g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
     sprites.set(key, s); return s;
   }
@@ -225,7 +225,7 @@
     }
     g.lineWidth = Math.max(0.6, Math.min(1.6, 0.9 * Math.sqrt(G.view.k)));
     for (const b of batches.values()) {
-      g.strokeStyle = rgba(b.rgb, b.dim ? 0.05 : 0.2);
+      g.strokeStyle = rgba(b.rgb, b.dim ? 0.05 : 0.26);
       g.beginPath();
       for (const e of b.list) { const [x1, y1] = toScreen(e.a.x, e.a.y), [x2, y2] = toScreen(e.b.x, e.b.y); g.moveTo(x1, y1); g.lineTo(x2, y2); }
       g.stroke();
@@ -263,7 +263,7 @@
     for (const [n, x, y, r] of vis) {
       const dim = dimmed(n);
       g.globalAlpha = dim ? 0.18 : (n === focus ? 1 : 0.85);
-      const s = r * (n === focus ? 6 : 4.2);
+      const s = r * (n === focus ? 7 : 5.2);
       g.drawImage(sprite(n.rgb), x - s / 2, y - s / 2, s, s);
     }
     g.globalAlpha = 1;
@@ -351,6 +351,7 @@
   function select(n) {
     G.selected = n;
     const sheet = $('graphSheet');
+    sheet.parentElement.scrollLeft = 0; sheet.parentElement.scrollTop = 0;   // focus inside the sheet must never scroll the map
     if (!n) { sheet.classList.remove('open'); sheet.setAttribute('aria-hidden', 'true'); wake(); return; }
     hidePreview();
     const near = G.edges.filter(e => e.a === n || e.b === n).sort((a, b) => b.w - a.w).slice(0, 6).map(e => (e.a === n ? e.b : e.a));
