@@ -1,4 +1,4 @@
-// shell.js — the phone-app shell for design C (Capture First), Oct 2026.
+// shell.js — the app shell (design v1: minimal and clean, Nov 2026; layout from design C, Oct 2026).
 // - Bottom tab bar: Today · Jobs · Capture · Study · Brain (the 10 old tabs live inside these)
 // - Offline: saved copies of Today, Jobs and Recent; thoughts typed offline wait in a queue
 //   on this phone and save themselves when the connection comes back
@@ -26,10 +26,10 @@
     let t = $('obToast');
     if (!t) {
       t = document.createElement('div'); t.id = 'obToast'; t.setAttribute('role', 'status');
-      t.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);z-index:30;bottom:calc(env(safe-area-inset-bottom,0px) + 92px);max-width:calc(100% - 40px);padding:12px 16px;border-radius:16px;font-size:15px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.4);transition:opacity .2s;';
+      t.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);z-index:30;bottom:calc(env(safe-area-inset-bottom,0px) + 92px);max-width:calc(100% - 40px);padding:9px 14px;border-radius:8px;font-size:13px;font-weight:500;transition:opacity .2s;';
       document.body.appendChild(t);
     }
-    t.style.background = ok ? '#14301F' : '#331816'; t.style.color = ok ? '#4ADE80' : '#FCA5A5';
+    t.style.background = ok ? '#1D1E20' : '#C2413B'; t.style.color = '#FFFFFF';
     t.textContent = text; t.style.opacity = '1';
     clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = '0'; }, 2600);
   }

@@ -2,33 +2,35 @@
    Loaded from index.html after the main styles; uses the same colour variables. */
 
 /* ---------- Ask (ask.js) ---------- */
-.ask-card { border-color: var(--accent); }
-.ask-card.ask-uncovered { border-color: var(--line-2); }
+.ask-card { border-color: var(--accent-line, #C9D5F7); box-shadow: inset 3px 0 0 var(--accent); }
+.ask-card.ask-uncovered { border-color: var(--line-2); box-shadow: none; }
 .ask-used { margin-top: 12px; }
-.ask-sources { list-style: none; margin: 0; padding: 0; font-size: 14px; line-height: 1.45; }
+.ask-sources { list-style: none; margin: 0; padding: 0; font-size: 13px; line-height: 1.45; }
 .ask-sources li { padding: 4px 0; border-top: 1px solid var(--line); }
-.ask-ref { font-weight: 700; color: #F2B35E; margin-right: 4px; }
-.ask-kind { display: inline-block; font-size: 12px; font-weight: 600; background: #22283A; color: var(--blue, #9DB4FF); border-radius: 999px; padding: 1px 8px; margin-right: 4px; }
-.ask-kind.ask-old { background: var(--accent-soft); color: #F7CB8C; }
+.ask-ref { font-weight: 600; color: var(--accent); margin-right: 4px; }
+.ask-kind { display: inline-block; font-size: 11.5px; font-weight: 500; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; margin-right: 4px; }
+.ask-kind.ask-old { background: var(--warn-soft, #FFF6E5); color: var(--warn, #8A5A00); border-color: #F1DDB0; }
 .ask-date { color: var(--muted); font-size: 13px; }
 
 /* ---------- Edit notes (edit-thought.js) ---------- */
 .et-bar { display: flex; justify-content: flex-end; margin: 4px -4px -10px 0; }
-.et-bar .linkish { min-height: 36px; font-size: 14px; }
-.et-badge { display: inline-block; font-size: 12px; font-weight: 600; background: var(--accent-soft); color: #F7CB8C; border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
+.et-bar .linkish { min-height: 32px; font-size: 12.5px; color: var(--muted); }
+.et-bar .linkish:hover { color: var(--accent); }
+@media (max-width: 767px) { .et-bar .linkish { min-height: 44px; } }
+.et-badge { display: inline-block; font-size: 11.5px; font-weight: 500; background: var(--warn-soft, #FFF6E5); color: var(--warn, #8A5A00); border: 1px solid #F1DDB0; border-radius: 5px; padding: 0 6px; margin-left: 4px; }
 .et-editor textarea { width: 100%; min-height: 140px; margin-top: 6px; font-size: 15px; line-height: 1.45; }
-.et-check { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text); margin: 12px 0 6px; }
-.et-check input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.et-check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); margin: 12px 0 6px; }
+.et-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
 .et-replace { margin: 6px 0 4px; }
 .et-results, .et-history { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.et-choice, .et-version { text-align: left; font-size: 14px; font-weight: 500; line-height: 1.4; padding: 10px 12px; min-height: 44px; display: flex; flex-direction: column; gap: 2px; }
+.et-choice, .et-version { text-align: left; justify-content: flex-start; align-items: flex-start; font-size: 13px; font-weight: 400; line-height: 1.4; padding: 10px 12px; min-height: 44px; display: flex; flex-direction: column; gap: 2px; }
 .et-pick-row { font-size: 14px; margin-top: 8px; color: var(--muted); }
 .et-actions { display: flex; gap: 8px; margin-top: 12px; }
 .et-actions button { flex: 1; }
 .et-toast { position: fixed; left: 16px; right: 16px; bottom: calc(90px + env(safe-area-inset-bottom, 0px)); z-index: 50; max-width: 480px; margin: 0 auto;
-  background: #14301F; color: var(--ok, #6EE7A0); padding: 12px 16px; border-radius: 14px; font-size: 14px; font-weight: 600; text-align: center; }
-.et-toast.err { background: #331816; color: #FCA5A5; }
+  background: var(--text, #1D1E20); color: #FFFFFF; padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; text-align: center; }
+.et-toast.err { background: var(--err, #C2413B); color: #FFFFFF; }
 
 /* ---------- Door check flag in the Library reader (door-flag.js) ---------- */
-.door-flag { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: var(--accent-soft); color: #F7CB8C; font-size: 14px; line-height: 1.45; }
+.door-flag { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--warn-soft, #FFF6E5); color: var(--warn, #8A5A00); border: 1px solid #F1DDB0; font-size: 13px; line-height: 1.45; }
 .door-flag .door-reasons { margin-top: 4px; font-size: 13px; color: var(--muted); }

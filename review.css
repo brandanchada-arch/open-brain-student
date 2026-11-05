@@ -2,26 +2,26 @@
 [hidden] { display: none !important; }
 
 .rv-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0 0 10px; }
-.rv-head h2 { font-size: 15px; font-weight: 700; margin: 0; }
-.rv-head button { min-height: 44px; font-size: 14px; padding: 0 14px; }
+.rv-head h2 { font-size: 15px; font-weight: 600; margin: 0; }
+.rv-head button { font-size: 13px; padding: 0 12px; }
 
 .rv-card { margin-bottom: 12px; }
 .rv-warn {
-  background: #331816; color: #FCA5A5; border-radius: 12px; padding: 10px 12px;
+  background: var(--warn-soft, #FFF6E5); color: var(--warn, #8A5A00); border: 1px solid #F1DDB0; border-radius: 8px; padding: 10px 12px;
   font-size: 14px; font-weight: 600; line-height: 1.4; margin: 4px 0 10px;
 }
 .rv-reason { font-size: 15px; line-height: 1.45; margin-bottom: 10px; }
-.rv-label { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--faint); margin: 10px 0 4px; }
+.rv-label { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); margin: 10px 0 4px; }
 .rv-text {
   font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
-  background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
   max-height: 320px; overflow-y: auto;
 }
-.rv-text.rv-new { border-color: var(--accent); }
+.rv-text.rv-new { border-color: var(--accent-line, #C9D5F7); background: var(--accent-soft, #EEF2FD); }
 .rv-text.rv-empty { color: var(--muted); font-style: italic; }
 .rv-sources { margin: 4px 0 0; padding-left: 18px; font-size: 14px; color: var(--muted); line-height: 1.45; }
 .rv-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
 
-.rv-page-title { font-size: 16px; font-weight: 650; }
+.rv-page-title { font-size: 14.5px; font-weight: 600; }
 .rv-page details { margin-top: 10px; }
-.rv-page summary { cursor: pointer; color: var(--muted); font-size: 14px; min-height: 32px; display: flex; align-items: center; }
+.rv-page summary { cursor: pointer; color: var(--muted); font-size: 14px; min-height: 36px; display: flex; align-items: center; }
