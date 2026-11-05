@@ -67,7 +67,7 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; background: var(--bg); }
   body {
-    margin: 0; font-family: var(--font); background: var(--bg); color: var(--text);
+    margin: 0; font-family: var(--font); background: transparent; color: var(--text);
     min-height: 100vh; min-height: 100dvh; overscroll-behavior-y: none; overflow-x: hidden;
     -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-size: 16px; line-height: 1.4;
   }
@@ -150,7 +150,7 @@
   .chip.active { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px rgba(16,24,40,.08), 0 3px 10px rgba(16,24,40,.10); }
   .sub { display: none; }
   .sub.active { display: block; animation: subIn .45s var(--spring) both; }
-  @keyframes subIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+  @keyframes subIn { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: none; } }
 
   /* Cards */
   .card { border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }

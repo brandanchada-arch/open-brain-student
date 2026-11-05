@@ -549,7 +549,13 @@
   const listeners = new Set();
   const emit = (event) => listeners.forEach(cb => setTimeout(() => cb(event, session), 0));
   const auth = {
-    onAuthStateChange(cb) { listeners.add(cb); setTimeout(() => cb('INITIAL_SESSION', session), 0); return { data: { subscription: { unsubscribe: () => listeners.delete(cb) } } }; },
+    onAuthStateChange(cb) {
+      listeners.add(cb);
+      // Like the real client, report the starting session only after the page's scripts have loaded.
+      const fire = () => setTimeout(() => cb('INITIAL_SESSION', session), 0);
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fire, { once: true }); else fire();
+      return { data: { subscription: { unsubscribe: () => listeners.delete(cb) } } };
+    },
     async getSession() { return { data: { session }, error: null }; },
     async getUser() { return { data: { user: session ? session.user : null }, error: null }; },
     async signInWithPassword() { session = { access_token: 'demo-token', token_type: 'bearer', user: USER }; emit('SIGNED_IN'); return { data: { session, user: USER }, error: null }; },

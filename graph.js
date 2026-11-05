@@ -281,15 +281,18 @@
     const order = G.nodes.filter(n => P.has(n.id)).sort((a, b) => (b === focus) - (a === focus) || b.deg - a.deg);
     for (const n of order) {
       const p = P.get(n.id);
+      const cardUp = n === focus && !$('graphHover').hidden;   // the preview card already names it
+      if (cardUp || (M && !M.has(n.id))) continue;
       const want = n === focus || (M && M.has(n.id) && M.size <= 12) || (showAll && (n.deg >= 4 || G.cam.k >= 2.6)) || (!M && !focus && n.hub);
       if (!want || (near && !near.has(n.id))) continue;
       if (p.sx < 0 || p.sy < 0 || p.sx > G.W || p.sy > G.H) continue;
       const text = shortLabel(n.label, 26), w = x.measureText(text).width + 12, y = p.sy + nodeR(n) + 6;
-      const box = [p.sx - w / 2 - 3, y - 4, p.sx + w / 2 + 3, y + 19];
+      const lx = Math.max(w / 2 + 4, Math.min(G.W - w / 2 - 4, p.sx));   // keep the label inside the panel
+      const box = [lx - w / 2 - 3, y - 4, lx + w / 2 + 3, y + 19];
       if (placed.some(b => b[0] < box[2] && box[0] < b[2] && b[1] < box[3] && box[1] < b[3])) continue;
       placed.push(box);
-      x.fillStyle = T.labelBg; roundRect(x, p.sx - w / 2, y - 2, w, 19, 9.5); x.fill();
-      x.fillStyle = T.label; x.fillText(text, p.sx, y + 1);
+      x.fillStyle = T.labelBg; roundRect(x, lx - w / 2, y - 2, w, 19, 9.5); x.fill();
+      x.fillStyle = T.label; x.fillText(text, lx, y + 1);
     }
   }
   function roundRect(x, l, t, w, h, r) { x.beginPath(); x.moveTo(l + r, t); x.arcTo(l + w, t, l + w, t + h, r); x.arcTo(l + w, t + h, l, t + h, r); x.arcTo(l, t + h, l, t, r); x.arcTo(l, t, l + w, t, r); x.closePath(); }
@@ -312,7 +315,7 @@
       } else { c.x = g.x; c.y = g.y; c.k = g.k; }
     }
     if (moving || G.dirty) { draw(); placeHover(); G.dirty = false; }
-    if (moving) wake();
+    if (moving) G.raf = requestAnimationFrame(frame);   // keep gliding (lastT carries over)
   }
   function wake() { if (!G.raf && G.visible) { G.lastT = 0; G.raf = requestAnimationFrame(frame); } }
   function redraw() { G.dirty = true; wake(); }
