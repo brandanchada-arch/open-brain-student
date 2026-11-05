@@ -376,7 +376,10 @@
     if (!q) { G.matches = null; out.textContent = ''; redraw(); return; }
     const words = q.split(/\s+/).filter(Boolean);
     const topicHit = new Set(G.clusters.filter(c => String(c.name).toLowerCase().includes(q)).map(c => c.id));
-    G.matches = new Set(G.nodes.filter(n => topicHit.has(n.c1) || words.every(w => n.lc.includes(w))));
+    // the exact phrase first; if nothing has it, every word somewhere in the note
+    let hits = G.nodes.filter(n => n.lc.includes(q));
+    if (!hits.length) hits = G.nodes.filter(n => words.every(w => n.lc.includes(w)));
+    G.matches = new Set(hits.concat(G.nodes.filter(n => topicHit.has(n.c1))));
     const vis = [...G.matches].filter(shown);
     out.textContent = vis.length === G.matches.size ? `${vis.length} found` : `${vis.length} of ${G.matches.size}`;
     if (move && vis.length) {

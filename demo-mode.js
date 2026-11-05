@@ -553,12 +553,14 @@
   }
 
   // ---------- auth ----------
+  // Like the real client, the first auth event comes after the page's scripts have all loaded.
+  const whenReady = (fn) => { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(fn, 0)); else setTimeout(fn, 0); };
   const listeners = new Set();
   const emit = (ev) => listeners.forEach(cb => { try { cb(ev, session); } catch (e) { console.warn(e); } });
   const auth = {
     async getSession() { return { data: { session }, error: null }; },
     async getUser() { return { data: { user: session ? USER : null }, error: null }; },
-    onAuthStateChange(cb) { listeners.add(cb); setTimeout(() => cb('INITIAL_SESSION', session), 0); return { data: { subscription: { unsubscribe: () => listeners.delete(cb) } } }; },
+    onAuthStateChange(cb) { listeners.add(cb); whenReady(() => cb('INITIAL_SESSION', session)); return { data: { subscription: { unsubscribe: () => listeners.delete(cb) } } }; },
     async signInWithPassword({ email }) { await tick(); session = { access_token: 'demo-token', user: { ...USER, email: email || USER.email } }; emit('SIGNED_IN'); return { data: { session, user: session.user }, error: null }; },
     async signUp(o) { return auth.signInWithPassword(o); },
     async signOut() { session = null; emit('SIGNED_OUT'); return { error: null }; },
