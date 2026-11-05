@@ -1,23 +1,23 @@
-/* Ask answers, note editing and the Library "door check" flag (Nov 3, 2026).
+/* Ask answers, note editing and the Library "door check" flag (Nov 3, 2026; glass look Nov 2026).
    Loaded from index.html after the main styles; uses the same colour variables. */
 
 /* ---------- Ask (ask.js) ---------- */
-.ask-card { border-color: var(--accent); }
-.ask-card.ask-uncovered { border-color: var(--line-2); }
+.ask-card { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), 0 8px 24px -10px rgba(10,100,224,.35); }
+.ask-card.ask-uncovered { border-color: var(--line-2); box-shadow: none; }
 .ask-used { margin-top: 12px; }
 .ask-sources { list-style: none; margin: 0; padding: 0; font-size: 14px; line-height: 1.45; }
-.ask-sources li { padding: 4px 0; border-top: 1px solid var(--line); }
-.ask-ref { font-weight: 700; color: #F2B35E; margin-right: 4px; }
-.ask-kind { display: inline-block; font-size: 12px; font-weight: 600; background: #22283A; color: var(--blue, #9DB4FF); border-radius: 999px; padding: 1px 8px; margin-right: 4px; }
-.ask-kind.ask-old { background: var(--accent-soft); color: #F7CB8C; }
+.ask-sources li { padding: 6px 0; border-top: 1px solid var(--line); }
+.ask-ref { font-weight: 700; color: var(--accent-text, #0A58C8); margin-right: 4px; }
+.ask-kind { display: inline-block; font-size: 12px; font-weight: 600; background: var(--accent-soft); color: var(--accent-text, #0A58C8); border-radius: 999px; padding: 1px 8px; margin-right: 4px; }
+.ask-kind.ask-old { background: var(--warn-soft, rgba(255,159,10,.16)); color: var(--warn-text, #8A4B00); }
 .ask-date { color: var(--muted); font-size: 13px; }
 
 /* ---------- Edit notes (edit-thought.js) ---------- */
 .et-bar { display: flex; justify-content: flex-end; margin: 4px -4px -10px 0; }
-.et-bar .linkish { min-height: 36px; font-size: 14px; }
-.et-badge { display: inline-block; font-size: 12px; font-weight: 600; background: var(--accent-soft); color: #F7CB8C; border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
-.et-editor textarea { width: 100%; min-height: 140px; margin-top: 6px; font-size: 15px; line-height: 1.45; }
-.et-check { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text); margin: 12px 0 6px; }
+.et-bar .linkish { min-height: 44px; font-size: 14px; }
+.et-badge { display: inline-block; font-size: 12px; font-weight: 600; background: var(--warn-soft, rgba(255,159,10,.16)); color: var(--warn-text, #8A4B00); border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
+.et-editor textarea { width: 100%; min-height: 140px; margin-top: 6px; font-size: 15px; line-height: 1.5; }
+.et-check { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text); margin: 12px 0 6px; min-height: 44px; }
 .et-check input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
 .et-replace { margin: 6px 0 4px; }
 .et-results, .et-history { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
@@ -25,10 +25,11 @@
 .et-pick-row { font-size: 14px; margin-top: 8px; color: var(--muted); }
 .et-actions { display: flex; gap: 8px; margin-top: 12px; }
 .et-actions button { flex: 1; }
-.et-toast { position: fixed; left: 16px; right: 16px; bottom: calc(90px + env(safe-area-inset-bottom, 0px)); z-index: 50; max-width: 480px; margin: 0 auto;
-  background: #14301F; color: var(--ok, #6EE7A0); padding: 12px 16px; border-radius: 14px; font-size: 14px; font-weight: 600; text-align: center; }
-.et-toast.err { background: #331816; color: #FCA5A5; }
+.et-toast { position: fixed; left: 16px; right: 16px; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); z-index: 50; max-width: 480px; margin: 0 auto;
+  background: var(--glass-strong, #fff); color: var(--ok, #157A3A); padding: 12px 18px; border-radius: 999px; font-size: 14px; font-weight: 600; text-align: center;
+  box-shadow: var(--shadow-lg, 0 10px 30px rgba(0,0,0,.2)); }
+.et-toast.err { color: var(--err, #C0332B); }
 
 /* ---------- Door check flag in the Library reader (door-flag.js) ---------- */
-.door-flag { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: var(--accent-soft); color: #F7CB8C; font-size: 14px; line-height: 1.45; }
+.door-flag { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: var(--warn-soft, rgba(255,159,10,.16)); color: var(--warn-text, #8A4B00); font-size: 14px; line-height: 1.45; }
 .door-flag .door-reasons { margin-top: 4px; font-size: 13px; color: var(--muted); }
