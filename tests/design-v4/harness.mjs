@@ -38,6 +38,7 @@ export async function openApp(browser, base, { path = '/index.html', viewport = 
     return route.abort();
   });
   await page.goto(base + path);
-  await page.waitForSelector('#app', { state: 'visible' }).catch(() => {});
+  // Signed in: the app shows. With ?login=1: the sign-in screen shows.
+  await page.waitForFunction(() => ['app', 'authScreen'].some((id) => document.getElementById(id).style.display === 'block'), null, { timeout: 15000 });
   return { context, page, log };
 }
