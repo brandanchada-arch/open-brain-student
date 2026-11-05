@@ -577,7 +577,9 @@
     getUser: async () => ({ data: { user: session ? session.user : null }, error: null }),
     onAuthStateChange(cb) {
       listeners.add(cb);
-      setTimeout(() => { try { cb(session ? 'INITIAL_SESSION' : 'INITIAL_SESSION', session); } catch (e) { console.warn(e); } }, 0);
+      // Wait until every script on the page has run (shell.js etc.), like the real client's network delay.
+      const fire = () => setTimeout(() => { try { cb('INITIAL_SESSION', session); } catch (e) { console.warn(e); } }, 0);
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fire, { once: true }); else fire();
       return { data: { subscription: { unsubscribe: () => listeners.delete(cb) } } };
     },
     async signInWithPassword({ email }) {
