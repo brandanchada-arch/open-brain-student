@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>My Open Brain</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1A1917">
+<meta name="theme-color" content="#0B1220">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,303 +14,572 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- Pinned version so the offline copy never goes stale or changes under us -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
 <script src="config.js"></script>
 <link rel="stylesheet" href="review.css">
 <style>
-  /* ---------- Design C: Capture First ---------- */
+  /* ---------- Design v5: Finance dashboard (navy + slate, green/amber signals) ---------- */
   :root {
-    --bg: #1A1917; --surface: #26241F; --surface-2: #1F1D19; --raised: #2C2A25;
-    --line: #36332C; --line-2: #3A372F;
-    --text: #F3EFE8; --muted: #A8A196; --faint: #8A8478;
-    --accent: #F2A541; --accent-ink: #1A1917; --accent-soft: #3A2C17;
-    --blue: #9DB8FF; --teal: #6FD6C0; --ok: #4ADE80; --err: #F87171;
-    --display: 'Bricolage Grotesque', -apple-system, system-ui, sans-serif;
-    --body: Figtree, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --bg: #0B1220; --bg-2: #0E1628; --surface: #111A2E; --surface-2: #0D1526; --raised: #16213A;
+    --line: #1E2A44; --line-2: #26344F; --line-3: #33425F;
+    --text: #E6EDF7; --muted: #8A9BB8; --faint: #64748B;
+    --accent: #22C55E; --accent-ink: #052E16; --accent-soft: rgba(34,197,94,.12);
+    --amber: #F59E0B; --amber-soft: rgba(245,158,11,.13); --amber-text: #FBBF24;
+    --blue: #60A5FA; --blue-soft: rgba(96,165,250,.12);
+    --ok: #22C55E; --err: #F87171; --err-soft: rgba(248,113,113,.12);
+    --display: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --body: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
-    --nav-h: 64px;
+    --nav-h: 60px; --side-w: 236px; --top-h: 52px;
+    --r: 6px;
   }
+  [hidden] { display: none !important; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; background: var(--bg); }
   body {
-    margin: 0; font-family: var(--body); background: var(--bg); color: var(--text);
-    min-height: 100vh; min-height: 100dvh; overscroll-behavior-y: none;
-    -webkit-font-smoothing: antialiased;
+    margin: 0; font-family: var(--body); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.45;
+    min-height: 100vh; min-height: 100dvh; overscroll-behavior-y: none; -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'cv11', 'ss01'; overflow-x: hidden;
   }
-  h1, h2 { font-family: var(--display); letter-spacing: -0.02em; margin: 0; }
+  h1, h2 { font-family: var(--display); letter-spacing: -0.01em; margin: 0; font-weight: 650; }
+  .num, .tbl td.n, .kpi-value, .pl-when, .thought-meta, .gq-count { font-variant-numeric: tabular-nums; }
+  .num { font-family: var(--mono); }
 
-  /* Buttons: 44px+ tap targets, press feedback */
+  /* Buttons: 44px tap targets on phones, compact with a mouse */
   button {
-    font-family: inherit; font-size: 16px; font-weight: 700; border: 0; cursor: pointer;
-    min-height: 48px; padding: 0 20px; border-radius: 16px;
-    background: var(--accent); color: var(--accent-ink);
-    transition: transform .12s ease, opacity .12s ease;
+    font-family: inherit; font-size: 14px; font-weight: 600; border: 1px solid transparent; cursor: pointer;
+    min-height: 44px; padding: 0 16px; border-radius: var(--r);
+    background: var(--accent); color: var(--accent-ink); transition: background .12s, border-color .12s, opacity .12s;
   }
-  button:active { transform: scale(.97); }
-  button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
-  button.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--line-2); font-weight: 600; }
-  button.danger { background: #4A1F1A; color: #FCA5A5; }
-  .icon-btn { width: 48px; min-width: 48px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  button:hover { filter: brightness(1.06); }
+  button:active { filter: brightness(.94); }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.secondary { background: var(--raised); color: var(--text); border-color: var(--line-2); font-weight: 500; }
+  button.secondary:hover { border-color: var(--line-3); filter: none; background: #1A2742; }
+  button.danger { background: var(--err-soft); color: #FCA5A5; border-color: rgba(248,113,113,.3); }
+  .icon-btn { width: 44px; min-width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 
-  /* Inputs: 16px+ text so iOS never zooms on focus */
+  /* Inputs: 16px text so iOS never zooms on focus */
   input, textarea, select {
     width: 100%; font-family: inherit; font-size: 16px; color: var(--text);
-    background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 14px;
-    padding: 12px 14px; min-height: 48px; outline: none; -webkit-appearance: none; appearance: none;
+    background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r);
+    padding: 10px 12px; min-height: 44px; outline: none; -webkit-appearance: none; appearance: none;
   }
-  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
-  input[type="checkbox"] { -webkit-appearance: auto; appearance: auto; min-height: 0; }
-  textarea { resize: none; min-height: 110px; line-height: 1.45; }
+  input:focus, textarea:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+  input[type="checkbox"] { -webkit-appearance: auto; appearance: auto; min-height: 0; width: auto; box-shadow: none; }
+  input[type="range"] { -webkit-appearance: auto; appearance: auto; padding: 0; min-height: 32px; background: transparent; border: 0; box-shadow: none; accent-color: var(--accent); }
+  textarea { resize: vertical; min-height: 110px; line-height: 1.5; }
   select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-    background-position: calc(100% - 20px) 21px, calc(100% - 15px) 21px; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 36px; }
+    background-position: calc(100% - 18px) 19px, calc(100% - 13px) 19px; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 34px; }
   ::placeholder { color: var(--faint); }
-  label { font-size: 13px; color: var(--muted); display: block; margin: 14px 0 6px; font-weight: 500; }
-  a { color: #F2B35E; }
+  label { font-size: 12px; color: var(--muted); display: block; margin: 12px 0 6px; font-weight: 600; letter-spacing: .02em; }
+  a { color: var(--blue); }
+  details > summary { cursor: pointer; }
 
-  /* ---------- Layout ---------- */
-  .container { max-width: 560px; margin: 0 auto; padding: 0 20px; }
-  #app { padding-top: calc(var(--safe-top) + 20px); padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 40px); }
+  /* ---------- Shell: sidebar (desktop) / bottom bar (phone) ---------- */
+  #app { min-height: 100vh; }
+  .topbar {
+    position: sticky; top: 0; z-index: 15; height: calc(var(--top-h) + var(--safe-top)); padding: var(--safe-top) 16px 0;
+    display: flex; align-items: center; gap: 12px; background: rgba(11,18,32,.92); border-bottom: 1px solid var(--line);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  }
+  .tb-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; letter-spacing: .01em; white-space: nowrap; }
+  .tb-crumb { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .tb-crumb b { color: var(--text); font-weight: 600; }
+  .tb-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+  .tb-date { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+  .tb-user { width: 30px; height: 30px; border-radius: 50%; background: var(--raised); border: 1px solid var(--line-2); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--text); }
+  #signOutBtn { min-height: 36px; padding: 0 12px; font-size: 13px; }
+  .logo-mark { width: 22px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, #1D4ED8 0%, #0F766E 100%); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .logo-mark svg { width: 14px; height: 14px; }
+
+  .main { padding: 18px 16px calc(var(--nav-h) + var(--safe-bottom) + 28px); max-width: 1440px; }
   .screen { display: none; }
-  .screen.active { display: block; animation: fadein .18s ease; }
-  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-  .screen-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; min-height: 48px; }
-  .screen-head h1 { font-size: 30px; font-weight: 700; line-height: 1.1; }
-  .section-title { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; font-weight: 700; margin: 26px 0 10px; }
-  .section-title a, .section-title button.linkish { font-size: 14px; font-weight: 500; }
-  .linkish { background: none; color: #F2B35E; min-height: 44px; padding: 0 4px; font-weight: 500; }
+  .screen.active { display: block; animation: fadein .16s ease; }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  .screen-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .screen-head h1 { font-size: 22px; line-height: 1.2; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
+  .head-meta { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .section-title { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; min-height: 28px; }
+  .section-title a, .section-title button.linkish { font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+  .linkish { background: none; color: var(--blue); min-height: 44px; padding: 0 6px; font-weight: 500; border: 0; }
+  .linkish:hover { text-decoration: underline; filter: none; }
 
-  /* Segmented chips (Capture modes, Study modes, Today/Week) */
-  .chips { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  /* Navigation: bottom bar on phones */
+  .sidebar {
+    position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; height: calc(var(--nav-h) + var(--safe-bottom)); padding: 0 4px var(--safe-bottom);
+    background: #0A101D; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .sb-brand, .sb-group, .sb-subs, .sb-foot { display: none; }
+  .sidebar button[data-screen] {
+    min-height: 44px; height: 100%; padding: 0; border-radius: 0; background: transparent; color: var(--muted); border: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; font-weight: 600; position: relative;
+  }
+  .sidebar button[data-screen].active { color: var(--text); }
+  .sidebar button[data-screen].active::before { content: ''; position: absolute; top: 0; left: 22%; right: 22%; height: 2px; background: var(--accent); }
+  .sidebar button.capture { color: var(--accent); }
+  .sidebar svg { width: 22px; height: 22px; }
+  .sb-badge { display: none; }
+  body.typing .sidebar { display: none; }
+
+  /* Desktop: fixed left sidebar */
+  @media (min-width: 1024px) {
+    .sidebar {
+      top: 0; right: auto; width: var(--side-w); height: 100vh; padding: 0 0 16px; display: flex; flex-direction: column; gap: 1px;
+      border-top: 0; border-right: 1px solid var(--line); background: #0A101D; overflow-y: auto;
+    }
+    .sb-brand { display: flex; align-items: center; gap: 10px; height: var(--top-h); padding: 0 18px; font-weight: 700; font-size: 15px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+    .sb-brand small { display: block; font-size: 10px; font-weight: 600; color: var(--faint); letter-spacing: .08em; text-transform: uppercase; }
+    .sb-group { display: block; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); padding: 14px 18px 6px; }
+    .sidebar button[data-screen] {
+      height: 38px; min-height: 38px; flex: 0 0 auto; flex-direction: row; justify-content: flex-start; gap: 10px; padding: 0 18px; font-size: 13.5px; font-weight: 500; color: #AFC0DA;
+    }
+    .sidebar button[data-screen]:hover { background: #111A2E; color: var(--text); filter: none; }
+    .sidebar button[data-screen].active { background: #13203A; color: var(--text); font-weight: 600; }
+    .sidebar button[data-screen].active::before { top: 6px; bottom: 6px; left: 0; right: auto; width: 3px; height: auto; border-radius: 0 2px 2px 0; }
+    .sidebar button.capture { color: var(--accent); }
+    .sidebar svg { width: 18px; height: 18px; flex: 0 0 auto; }
+    .sb-badge { display: inline-block; margin-left: auto; font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 3px; background: var(--amber-soft); color: var(--amber-text); }
+    .sb-badge:empty { display: none; }
+    .sb-subs { display: flex; flex-direction: column; padding: 2px 0 6px; }
+    .sb-subs button { min-height: 30px; height: 30px; padding: 0 18px 0 46px; text-align: left; background: transparent; color: var(--muted); border: 0; border-radius: 0; font-size: 13px; font-weight: 500; display: flex; align-items: center; }
+    .sb-subs button:hover { color: var(--text); background: #0F1829; filter: none; }
+    .sb-subs button.active { color: var(--text); }
+    .sb-subs button.active::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin: 0 8px 0 -13px; }
+    .sb-foot { display: block; margin-top: auto; padding: 14px 18px 0; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); }
+    #app { margin-left: var(--side-w); }
+    .topbar { padding: 0 24px; }
+    .tb-brand { display: none; }
+    .main { padding: 22px 28px 48px; }
+    body.typing .sidebar { display: flex; }
+  }
+  @media (min-width: 1024px) and (pointer: fine) {
+    button { min-height: 36px; }
+    .icon-btn { width: 36px; min-width: 36px; }
+    input, select { min-height: 38px; padding-top: 7px; padding-bottom: 7px; font-size: 14px; }
+    select { background-position: calc(100% - 18px) 16px, calc(100% - 13px) 16px; }
+    textarea { font-size: 14px; }
+    .linkish { min-height: 32px; }
+  }
+
+  /* Segmented control (sub-tabs) */
+  .chips { display: flex; gap: 0; margin-bottom: 14px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line); }
   .chips::-webkit-scrollbar { display: none; }
   .chip {
-    flex: 0 0 auto; min-height: 44px; padding: 0 18px; border-radius: 999px;
-    background: transparent; color: #D8D2C8; border: 1px solid var(--line-2); font-size: 15px; font-weight: 600;
+    flex: 0 0 auto; min-height: 44px; padding: 0 16px; border-radius: 0; background: transparent; color: var(--muted); border: 0;
+    border-bottom: 2px solid transparent; font-size: 14px; font-weight: 500; margin-bottom: -1px;
   }
-  .chip.active { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 700; }
+  .chip:hover { color: var(--text); filter: none; }
+  .chip.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
   .sub { display: none; }
   .sub.active { display: block; }
 
-  /* Cards */
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px; margin-bottom: 12px; }
-  details.card > summary { cursor: pointer; list-style: none; min-height: 28px; display: flex; align-items: center; font-weight: 600; }
+  /* Panels and cards: sharp, compact */
+  .card, .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; margin-bottom: 12px; }
+  .panel { padding: 0; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 14px; min-height: 42px; border-bottom: 1px solid var(--line);
+    font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .panel-head .ph-meta { font-family: var(--mono); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--faint); font-size: 12px; }
+  .panel-body { padding: 12px 14px; }
+  details.card > summary { list-style: none; min-height: 28px; display: flex; align-items: center; font-weight: 600; font-size: 13px; color: var(--muted); }
   details.card > summary::-webkit-details-marker { display: none; }
-  .composer { padding: 16px; }
-  .composer textarea { background: transparent; border: 0; padding: 0; font-size: 18px; min-height: 72px; }
-  .composer-actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+  details.card > summary::before { content: '▸'; margin-right: 8px; color: var(--faint); font-size: 11px; }
+  details.card[open] > summary::before { content: '▾'; }
+  .composer { padding: 12px 14px; }
+  .composer textarea { background: transparent; border: 0; padding: 0; font-size: 16px; min-height: 64px; box-shadow: none; resize: none; }
+  .composer-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
   .composer-actions .save { margin-left: auto; }
   .resurface { cursor: pointer; }
-  .resurface .meta { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-  .resurface .text { font-size: 16px; line-height: 1.45; }
+  .resurface .meta { font-size: 12px; color: var(--muted); margin-bottom: 6px; font-family: var(--mono); display: flex; flex-wrap: wrap; gap: 4px; }
+  .resurface .text { font-size: 14px; line-height: 1.5; }
+
+  /* ---------- KPI tiles ---------- */
+  .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+  @media (min-width: 760px) { .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .kpi { position: relative; text-align: left; display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-height: 104px; padding: 12px 14px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); color: var(--text); font-weight: 400; cursor: pointer; overflow: hidden; }
+  .kpi:hover { border-color: var(--line-3); filter: none; background: #131E35; }
+  .kpi-label { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .kpi-value { font-family: var(--mono); font-size: 26px; font-weight: 600; line-height: 1.15; letter-spacing: -0.02em; margin-top: 4px; }
+  #kpiWeek .kpi-sub { padding-right: 104px; }
+  @media (max-width: 420px) { #kpiWeek .kpi-sub { padding-right: 0; } }
+  .kpi-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi-delta { font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 3px; letter-spacing: 0; text-transform: none; }
+  .kpi-delta.up { background: var(--accent-soft); color: #4ADE80; }
+  .kpi-delta.down { background: var(--err-soft); color: #FCA5A5; }
+  .kpi-delta.flat { background: var(--raised); color: var(--muted); }
+  .kpi-delta.warn { background: var(--amber-soft); color: var(--amber-text); }
+  .kpi-spark { position: absolute; right: 12px; bottom: 12px; width: 96px; height: 30px; opacity: .95; }
+  .kpi-spark rect { fill: #2B4A7A; }
+  .kpi-spark rect.hi { fill: var(--accent); }
+  .kpi.alert { border-color: rgba(245,158,11,.35); }
+  .kpi.alert .kpi-value { color: var(--amber-text); }
+  @media (max-width: 420px) { .kpi-spark { display: none; } .kpi-value { font-size: 23px; } .kpi { min-height: 92px; } }
+
+  .dash-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  @media (min-width: 1180px) { .dash-grid { grid-template-columns: minmax(0, 1fr) 380px; } }
+  .dash-side { min-width: 0; }
+  .dash-main { min-width: 0; }
+
+  /* Tables */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tbl th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); padding: 8px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .tbl td { padding: 8px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .tbl tr:last-child td { border-bottom: 0; }
+  .tbl th.n, .tbl td.n { text-align: right; font-family: var(--mono); }
+  .tbl tbody tr { cursor: pointer; }
+  .tbl tbody tr:hover td { background: #131E35; }
+  .tbl .t-topic { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .tbl .t-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 0; width: 100%; }
+  .share { display: block; height: 6px; background: var(--raised); border-radius: 1px; overflow: hidden; min-width: 50px; }
+  .share > span { display: block; height: 100%; }
 
   /* Status + messages */
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: #555; flex: 0 0 auto; }
-  .dot.on { background: var(--ok); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #475569; flex: 0 0 auto; display: inline-block; }
+  .dot.on { background: var(--ok); box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
   .dot.off { background: var(--err); }
-  .msg { font-size: 14px; padding: 12px 14px; border-radius: 14px; margin-top: 10px; line-height: 1.4; }
-  .msg.ok { background: #14301F; color: var(--ok); }
-  .msg.err { background: #331816; color: #FCA5A5; }
-  .offline-bar { display: none; position: sticky; top: calc(var(--safe-top) + 4px); z-index: 5; margin: 0 0 12px; padding: 10px 14px; border-radius: 14px;
-    background: var(--accent-soft); color: #F7CB8C; font-size: 14px; font-weight: 600; }
+  .msg { font-size: 13px; padding: 10px 12px; border-radius: var(--r); margin-top: 10px; line-height: 1.4; border: 1px solid transparent; }
+  .msg.ok { background: var(--accent-soft); color: #4ADE80; border-color: rgba(34,197,94,.25); }
+  .msg.err { background: var(--err-soft); color: #FCA5A5; border-color: rgba(248,113,113,.25); }
+  .offline-bar { display: none; position: sticky; top: calc(var(--top-h) + var(--safe-top) + 6px); z-index: 5; margin: 0 0 12px; padding: 9px 12px; border-radius: var(--r);
+    background: var(--amber-soft); color: var(--amber-text); border: 1px solid rgba(245,158,11,.3); font-size: 13px; font-weight: 600; }
   body.offline .offline-bar { display: block; }
-  .stale { opacity: .75; pointer-events: none; }
-  .link { color: #F2B35E; cursor: pointer; text-decoration: underline; font-size: 14px; }
+  .stale { opacity: .7; pointer-events: none; }
+  .link { color: var(--blue); cursor: pointer; text-decoration: underline; font-size: 13px; }
   .row { display: flex; gap: 8px; }
   .row > * { flex: 1; min-width: 0; }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 8px; line-height: 1.45; }
+  .fine { font-size: 12px; color: var(--faint); margin-top: 6px; line-height: 1.45; }
 
-  /* Capture: voice */
-  .mic-wrap { display: flex; flex-direction: column; align-items: center; padding: 8px 0 4px; }
-  .mic-btn { width: 88px; height: 88px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; }
-  .icon-btn.listening { background: var(--err); color: var(--accent-ink); border-color: var(--err); }
-  .mic-btn.listening { animation: pulse 1.2s infinite; background: var(--err); }
-  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(248,113,113,.6); } 70% { box-shadow: 0 0 0 22px rgba(248,113,113,0); } 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0); } }
-  .drop-zone { border: 2px dashed var(--line-2); border-radius: 20px; padding: 36px 16px; text-align: center; color: var(--muted); cursor: pointer; font-size: 16px; }
+  /* Capture */
+  .capture-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); max-width: 980px; }
+  .mic-wrap { display: flex; align-items: center; gap: 14px; padding: 4px 0 6px; }
+  .mic-btn { width: 56px; height: 56px; min-width: 56px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; }
+  .mic-wrap .hint { margin: 0; }
+  .icon-btn.listening { background: var(--err); color: #fff; border-color: var(--err); }
+  .mic-btn.listening { animation: pulse 1.2s infinite; background: var(--err); color: #fff; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(248,113,113,.6); } 70% { box-shadow: 0 0 0 16px rgba(248,113,113,0); } 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0); } }
+  .drop-zone { border: 1px dashed var(--line-3); border-radius: var(--r); padding: 32px 16px; text-align: center; color: var(--muted); cursor: pointer; font-size: 14px; background: var(--surface-2); }
   .drop-zone.drag { border-color: var(--accent); color: var(--text); }
-  .progress-bar { height: 6px; background: var(--line-2); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+  .progress-bar { height: 4px; background: var(--line-2); border-radius: 1px; overflow: hidden; margin-top: 8px; }
   .progress-fill { height: 100%; background: var(--accent); transition: width .2s; }
-  .hint { font-size: 14px; color: var(--muted); margin-top: 8px; line-height: 1.45; }
 
-  /* Brain: thoughts */
-  .thought-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; margin-bottom: 10px; }
-  .thought-meta { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-  .thought-content { font-size: 15px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
-  .search-row { display: flex; gap: 8px; }
-  .search-row input { flex: 1; }
+  /* Thoughts: table-like rows */
+  .list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+  .list:empty { display: none; }
+  .list-head { display: grid; grid-template-columns: 112px 1fr; gap: 12px; padding: 8px 14px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--line); background: var(--surface-2); }
+  .thought-card { background: var(--surface); border-bottom: 1px solid var(--line); padding: 10px 14px; display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; gap: 4px 12px; align-items: start; }
+  .thought-card:last-child { border-bottom: 0; }
+  .thought-card:hover { background: #131E35; }
+  .thought-card:has(.et-editor), .thought-card:has(.hint:only-child) { display: block; }
+  .thought-meta { font-size: 12px; color: var(--muted); font-family: var(--mono); padding-top: 1px; }
+  .thought-content { font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; min-width: 0; }
+  .thought-card > .thought-meta ~ .thought-meta, .thought-card > .thought-content ~ .thought-content { grid-column: 2 / 3; }
+  .thought-card > .et-bar { grid-column: 3; grid-row: 1; }
+  .search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .search-row input { flex: 1; min-width: 0; }
+  .empty { color: var(--muted); text-align: center; padding: 22px; font-size: 13px; }
+  @media (max-width: 640px) {
+    .thought-card { grid-template-columns: minmax(0, 1fr) auto; }
+    .thought-card > .thought-meta { grid-column: 1; }
+    .thought-card > .thought-content, .thought-card > .thought-meta ~ .thought-meta, .thought-card > .thought-content ~ .thought-content { grid-column: 1 / -1; }
+    .thought-card > .et-bar { grid-column: 2; grid-row: 1; }
+    .list-head { display: none; }
+  }
+  /* The standalone cards (Ask answer, Review, Library entries) keep card form */
+  .ask-card, .rv-card, .lib-item.thought-card { display: block; border: 1px solid var(--line); border-radius: var(--r); margin-bottom: 10px; }
 
   /* Today + Jobs (planner.js / jobs.js render these classes) */
-  .pl-day { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 22px 0 10px; }
-  .pl-item { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; margin-bottom: 8px; }
+  .pl-day { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin: 18px 0 6px; display: flex; align-items: center; gap: 8px; }
+  .pl-day::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  .pl-item { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; margin-bottom: 6px; }
+  .pl-item:hover { border-color: var(--line-2); }
   .pl-item.done .pl-title { text-decoration: line-through; color: var(--faint); }
-  .pl-check { width: 24px; height: 24px; margin: 0; flex: 0 0 auto; accent-color: var(--accent); }
-  .pl-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line-2); margin: 7px 7px 0; flex: 0 0 auto; }
+  .pl-check { width: 20px; height: 20px; margin: 1px 0 0; flex: 0 0 auto; accent-color: var(--accent); }
+  .pl-dot { width: 8px; height: 8px; border-radius: 1px; background: var(--blue); margin: 6px 6px 0; flex: 0 0 auto; }
   .pl-body { flex: 1; min-width: 0; }
-  .pl-title { font-size: 16px; font-weight: 600; line-height: 1.35; word-break: break-word; }
-  .pl-when { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
-  .pl-chip { display: inline-block; font-size: 12px; font-weight: 600; background: #22283A; color: var(--blue); border-radius: 999px; padding: 2px 9px; margin-left: 4px; }
-  .pl-chip.brain { background: var(--accent-soft); color: #F7CB8C; }
-  .pl-empty { color: var(--muted); font-size: 14px; padding: 4px 2px 8px; }
-  .pl-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .pl-actions button { min-height: 44px; padding: 0 16px; font-size: 15px; border-radius: 14px; }
-  #panel-today [data-view] { min-height: 44px; border-radius: 999px; font-size: 15px; }
-  .pl-post { white-space: pre-wrap; font-size: 14px; line-height: 1.5; color: var(--text, #ddd); max-height: 60vh; overflow-y: auto; margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; }
+  .pl-title { font-size: 14px; font-weight: 600; line-height: 1.35; word-break: break-word; }
+  .pl-when { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+  .pl-chip { display: inline-block; font-size: 11px; font-weight: 600; background: var(--blue-soft); color: var(--blue); border-radius: 3px; padding: 1px 6px; margin-left: 4px; font-family: var(--mono); }
+  .pl-chip.brain { background: var(--accent-soft); color: #4ADE80; }
+  .pl-empty { color: var(--muted); font-size: 13px; padding: 6px 2px 8px; }
+  .pl-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .pl-actions button { padding: 0 12px; font-size: 13px; }
+  #panel-today [data-view] { font-size: 13px; }
+  .pl-post { white-space: pre-wrap; font-size: 13px; line-height: 1.55; color: var(--text); max-height: 60vh; overflow-y: auto; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
   .pl-filter { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
-  .pl-filter button { min-height: 36px; padding: 0 12px; font-size: 14px; border-radius: 999px; }
-  .pl-item.open { border-color: var(--accent); }
-  [hidden] { display: none !important; }
+  .pl-filter button { padding: 0 12px; font-size: 13px; }
+  .pl-item.open { border-color: var(--blue); }
+  .seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
+  .seg button { border-radius: 0; border: 0; }
+  .seg button.secondary { background: transparent; }
 
-  /* ---------- Study (gaps.js) ---------- */
-  .gq-meta { font-size: 14px; color: var(--muted); margin: 0 2px 12px; }
-  /* Study: Library */
-  [hidden] { display: none !important; }
+  /* Jobs dashboard strip */
+  .jobs-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+  @media (min-width: 760px) { .jobs-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .jobs-kpis .kpi { min-height: 76px; cursor: default; }
+  .jobs-kpis .kpi-value { font-size: 22px; }
+  .wrap-narrow { max-width: 980px; }
+
+  /* ---------- Study ---------- */
+  .gq-meta { font-size: 12px; color: var(--muted); margin: 0 2px 10px; font-family: var(--mono); }
   .lib-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
   .lib-filters select:last-child { grid-column: 1 / -1; }
+  @media (min-width: 760px) { .lib-filters { grid-template-columns: repeat(3, 1fr); } .lib-filters select:last-child { grid-column: auto; } }
+  .lib-tools { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  @media (min-width: 760px) { .lib-tools { grid-template-columns: minmax(0, 1fr) auto; } .lib-tools .search-row { margin: 0; } }
   .lib-item { cursor: pointer; }
-  .lib-title { font-size: 16px; font-weight: 650; line-height: 1.35; }
-  .lib-reader { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px; margin-bottom: 14px; }
-  .lib-reader .lib-text { white-space: pre-wrap; line-height: 1.55; font-size: 15px; margin-top: 12px; overflow-wrap: anywhere; }
-  .gq-steps { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
-  .gq-step { width: 28px; height: 4px; border-radius: 99px; background: var(--line-2); }
-  .gq-step.done { background: #8A6A3A; }
+  .lib-title { font-size: 14px; font-weight: 600; line-height: 1.35; }
+  .lib-reader { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--blue); border-radius: var(--r); padding: 14px; margin-bottom: 14px; }
+  .lib-reader .lib-text { white-space: pre-wrap; line-height: 1.6; font-size: 14px; margin-top: 12px; overflow-wrap: anywhere; }
+  .gq-steps { display: flex; align-items: center; gap: 4px; margin-bottom: 12px; }
+  .gq-step { width: 32px; height: 3px; border-radius: 1px; background: var(--line-2); }
+  .gq-step.done { background: #166534; }
   .gq-step.now { background: var(--accent); }
-  .gq-count { margin-left: auto; font-size: 14px; color: var(--muted); }
-  .gq-card { background: var(--surface); border: 1px solid var(--line); border-radius: 26px; padding: 22px; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; transition: transform .2s ease, opacity .2s ease; }
-  .gq-kicker { font-size: 12px; font-weight: 700; color: #F2B35E; letter-spacing: .05em; text-transform: uppercase; }
-  .gq-q { font-family: var(--display); font-size: 24px; font-weight: 600; line-height: 1.25; word-break: break-word; }
-  .gq-why { font-size: 14px; color: var(--muted); }
-  .gq-answer-box { padding: 14px 16px; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 16px; font-size: 16px; line-height: 1.45; }
-  .gq-buttons { display: flex; gap: 10px; }
+  .gq-count { margin-left: auto; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .gq-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; display: flex; flex-direction: column; gap: 12px; touch-action: pan-y; transition: transform .2s ease, opacity .2s ease; max-width: 760px; }
+  .gq-kicker { font-size: 11px; font-weight: 700; color: var(--amber-text); letter-spacing: .08em; text-transform: uppercase; }
+  .gq-q { font-size: 19px; font-weight: 600; line-height: 1.35; word-break: break-word; }
+  .gq-why { font-size: 13px; color: var(--muted); }
+  .gq-answer-box { padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r); font-size: 14px; line-height: 1.5; }
+  .gq-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
   .gq-buttons > .grow { flex: 1; }
-  .gq-got { background: #163322; color: var(--ok); border: 1px solid #23452F; }
-  .gq-miss { background: #33200F; color: #FB923C; border: 1px solid #4A2A22; }
-  .gq-swipe { text-align: center; font-size: 13px; color: var(--muted); margin-top: 12px; }
-  .gq-done { text-align: center; padding: 30px 22px; }
-  .gq-done .big { font-family: var(--display); font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+  .gq-got { background: var(--accent-soft); color: #4ADE80; border: 1px solid rgba(34,197,94,.35); }
+  .gq-miss { background: var(--amber-soft); color: var(--amber-text); border: 1px solid rgba(245,158,11,.35); }
+  .gq-swipe { font-size: 12px; color: var(--faint); margin-top: 10px; }
+  .gq-done { text-align: left; padding: 22px 18px; }
+  .gq-done .big { font-size: 18px; font-weight: 650; margin-bottom: 4px; }
+  #gapsBtn, #quizBtn { max-width: 760px; }
 
   /* ---------- Brain map (graph.js) ---------- */
-  .graph-wrap { position: relative; height: min(calc(100dvh - var(--safe-top) - var(--safe-bottom) - 330px), calc((100vw - 40px) * 1.08), 620px); min-height: 340px;
-    border-radius: 24px; overflow: hidden; background: #0c0b0e; border: 1px solid #23211D; }
+  .graph-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 8px; }
+  @media (min-width: 760px) { .graph-toolbar { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; } }
+  .gt-search { position: relative; }
+  .gt-search input { padding-right: 92px; }
+  .gt-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+  .gt-search input { padding-left: 34px; }
+  #graphSearchCount { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 12px; color: var(--amber-text); pointer-events: none; }
+  #graphSearchCount.none { color: var(--err); }
+  .gt-min { display: flex; align-items: center; gap: 10px; margin: 0; padding: 0 12px; min-height: 44px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--surface-2); white-space: nowrap; color: var(--muted); }
+  .gt-min input { width: 120px; flex: 1; }
+  .gt-min output { font-family: var(--mono); color: var(--text); min-width: 2ch; text-align: right; }
+  .graph-tool { min-height: 44px; padding: 0 14px; font-size: 13px; font-weight: 500; background: var(--raised); color: var(--text); border: 1px solid var(--line-2); }
+  .graph-tool[aria-pressed="true"] { border-color: var(--accent); color: #4ADE80; }
+  .graph-legend { border-bottom: 0; gap: 6px; flex-wrap: wrap; overflow: visible; margin-bottom: 10px; }
+  .legend-chip, .legend-all { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; min-height: 36px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: var(--r); margin: 0; color: var(--text); background: var(--surface); }
+  .legend-chip.off { opacity: .45; background: transparent; }
+  .legend-chip.off .gs-dot { background: transparent !important; box-shadow: inset 0 0 0 1.5px var(--muted); }
+  .legend-n { font-size: 11px; color: var(--muted); }
+  .legend-all { color: var(--blue); }
+  @media (max-width: 1023px) { .legend-chip, .legend-all { min-height: 44px; } }
+  .graph-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  @media (min-width: 1180px) { .graph-layout { grid-template-columns: minmax(0, 1fr) 320px; } }
+  .graph-wrap { position: relative; height: min(68vh, 680px); min-height: 360px; border-radius: var(--r); overflow: hidden; background: #08101E; border: 1px solid var(--line); }
+  @media (max-width: 640px) { .graph-wrap { height: 62vh; min-height: 340px; } }
   #graphCanvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; cursor: grab; }
-  .graph-status { position: absolute; left: 0; right: 0; top: 45%; text-align: center; color: var(--muted); font-size: 15px; pointer-events: none; padding: 0 24px; }
-  .graph-note { position: absolute; left: 12px; right: 12px; top: 12px; padding: 10px 14px; border-radius: 14px; background: rgba(38,36,31,.92);
-    color: var(--text); font-size: 14px; font-weight: 600; opacity: 0; transition: opacity .3s; pointer-events: none; }
-  .graph-tools { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 8px; }
-  .graph-tool { min-height: 44px; padding: 0 14px; border-radius: 14px; font-size: 14px; font-weight: 600;
-    background: rgba(38,36,31,.85); color: var(--text); border: 1px solid #3A372F; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-  .graph-tool.icon-btn { width: 44px; min-width: 44px; padding: 0; }
-  .graph-sheet { position: absolute; left: 8px; right: 8px; bottom: 8px; max-height: 72%; overflow-y: auto; -webkit-overflow-scrolling: touch;
-    background: #1F1D19; border: 1px solid var(--line-2); border-radius: 20px; padding: 14px 16px 16px;
-    transform: translateY(110%); transition: transform .25s cubic-bezier(.2,.8,.2,1); box-shadow: 0 -10px 30px rgba(0,0,0,.5); }
-  .graph-sheet:not(.open) { visibility: hidden; box-shadow: none; transition: transform .25s, visibility 0s .25s; }
+  #graphCanvas.pointing { cursor: pointer; }
+  #graphCanvas.grabbing { cursor: grabbing; }
+  .graph-status { position: absolute; left: 0; right: 0; top: 45%; text-align: center; color: var(--muted); font-size: 14px; pointer-events: none; padding: 0 24px; }
+  .graph-note { position: absolute; left: 12px; top: 12px; padding: 8px 12px; border-radius: var(--r); background: rgba(17,26,46,.95); border: 1px solid var(--line-2);
+    color: var(--text); font-size: 13px; font-weight: 600; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .graph-zoom { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; background: rgba(17,26,46,.94); }
+  .graph-zoom button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 0; background: transparent; color: var(--text); border: 0; border-bottom: 1px solid var(--line-2); display: flex; align-items: center; justify-content: center; }
+  .graph-zoom button:last-child { border-bottom: 0; }
+  .graph-zoom button:hover { background: var(--raised); filter: none; }
+  .graph-scale { position: absolute; left: 10px; bottom: 10px; font-family: var(--mono); font-size: 11px; color: var(--faint); pointer-events: none; }
+  .graph-hover { position: absolute; left: 0; top: 0; z-index: 3; width: 260px; max-width: calc(100% - 16px); background: rgba(17,26,46,.98); border: 1px solid var(--line-3); border-radius: var(--r);
+    padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.45); pointer-events: none; }
+  .graph-hover.touch { pointer-events: auto; }
+  .gh-top { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .gh-topic { font-weight: 600; flex: 1; min-width: 0; }
+  .gh-deg { font-size: 11px; color: var(--muted); }
+  .gh-text { font-size: 13px; line-height: 1.45; margin-top: 6px; word-break: break-word; }
+  .gh-meta { font-size: 11px; color: var(--faint); margin-top: 6px; font-family: var(--mono); }
+  .gh-open { width: 100%; margin-top: 8px; }
+  .graph-sheet { position: absolute; left: 8px; right: 8px; bottom: 8px; max-height: 70%; overflow-y: auto; -webkit-overflow-scrolling: touch; z-index: 4;
+    background: var(--surface); border: 1px solid var(--line-3); border-radius: var(--r); padding: 12px 14px 14px;
+    transform: translateY(110%); transition: transform .22s cubic-bezier(.2,.8,.2,1); box-shadow: 0 -10px 30px rgba(0,0,0,.5); }
+  @media (min-width: 760px) { .graph-sheet { left: auto; right: 64px; top: 10px; bottom: 10px; width: 340px; max-height: none; transform: translateX(120%); } }
+  .graph-sheet:not(.open) { visibility: hidden; box-shadow: none; transition: transform .22s, visibility 0s .22s; }
   .graph-sheet.open { transform: none; }
   .gs-top { display: flex; align-items: center; gap: 10px; }
-  .gs-topic { flex: 1; font-size: 14px; font-weight: 700; }
-  .gs-close { min-height: 44px; }
-  .gs-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; display: inline-block; box-shadow: 0 0 8px currentColor; }
-  .gs-date { font-size: 13px; color: var(--muted); margin: 4px 0 10px; }
-  .gs-text { font-size: 16px; line-height: 1.45; word-break: break-word; }
+  .gs-topic { flex: 1; font-size: 13px; font-weight: 700; }
+  .gs-close { min-height: 36px; height: 36px; width: 36px; min-width: 36px; }
+  @media (max-width: 1023px) { .gs-close { min-height: 44px; height: 44px; width: 44px; min-width: 44px; } }
+  .gs-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
+  .gs-date { font-size: 12px; color: var(--muted); margin: 4px 0 10px; }
+  .gs-text { font-size: 14px; line-height: 1.5; word-break: break-word; }
   .gs-text.full { white-space: pre-wrap; }
-  .gs-near-title { font-size: 13px; font-weight: 700; color: var(--muted); margin: 16px 0 6px; text-transform: uppercase; letter-spacing: .05em; }
-  .gs-near { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; color: var(--text);
-    border-top: 1px solid var(--line); border-radius: 0; padding: 10px 0; min-height: 48px; font-size: 15px; font-weight: 500; }
-  .gs-near span:last-child { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  .graph-legend { margin: 12px 0 6px; }
-  .legend-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
-  .legend-chip.active .gs-dot { box-shadow: none; }
-
-  /* ---------- Bottom tab bar (floating pill) ---------- */
-  .tabbar {
-    position: fixed; left: 50%; transform: translateX(-50%); z-index: 20;
-    bottom: calc(var(--safe-bottom) + 14px); width: calc(100% - 40px); max-width: 520px; height: var(--nav-h);
-    padding: 6px; background: rgba(44,42,37,.94); border: 1px solid var(--line-2); border-radius: 24px;
-    box-shadow: 0 10px 30px rgba(0,0,0,.45); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
-    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: transform .2s ease, opacity .2s ease;
-  }
-  .tabbar button {
-    min-height: 0; height: 100%; padding: 0; border-radius: 18px; background: transparent; color: var(--muted);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 600;
-  }
-  .tabbar button.active { background: var(--text); color: var(--bg); }
-  .tabbar button.capture { color: var(--accent); }
-  .tabbar button.capture.active { background: var(--accent); color: var(--accent-ink); }
-  .tabbar svg { width: 24px; height: 24px; }
-  body.typing .tabbar { opacity: 0; pointer-events: none; transform: translate(-50%, 20px); }
+  .gs-near-title { font-size: 11px; font-weight: 700; color: var(--muted); margin: 14px 0 4px; text-transform: uppercase; letter-spacing: .07em; }
+  .gs-near { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; color: var(--text); border: 0;
+    border-top: 1px solid var(--line); border-radius: 0; padding: 8px 0; min-height: 44px; font-size: 13px; font-weight: 400; }
+  .gs-near:hover { filter: none; background: var(--raised); }
+  .gs-near-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .gs-sim { font-size: 11px; color: var(--muted); }
+  .graph-side { align-self: start; }
+  .graph-side ol { list-style: none; margin: 0; padding: 4px 0; }
+  .rank-row { display: grid; grid-template-columns: 22px 10px minmax(0, 1fr) 44px 26px; align-items: center; gap: 8px; width: 100%; text-align: left; min-height: 44px;
+    padding: 0 14px; background: transparent; border: 0; border-radius: 0; color: var(--text); font-size: 13px; font-weight: 400; }
+  .rank-row:hover { background: #131E35; filter: none; }
+  .rank-row.active { background: #13203A; box-shadow: inset 3px 0 0 var(--accent); }
+  .rank-row.match .rank-label { color: var(--amber-text); }
+  .rank-i { color: var(--faint); font-size: 12px; }
+  .rank-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rank-bar { height: 4px; background: var(--raised); border-radius: 1px; overflow: hidden; }
+  .rank-bar span { display: block; height: 100%; }
+  .rank-deg { text-align: right; font-size: 12px; }
+  .graph-stats { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; border-top: 1px solid var(--line); }
+  .graph-stats div { padding: 10px 14px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .graph-stats div:nth-child(3n) { border-right: 0; }
+  .graph-stats div:nth-last-child(-n+3) { border-bottom: 0; }
+  .graph-stats dt { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+  .graph-stats dd { margin: 2px 0 0; font-size: 16px; font-weight: 600; }
+  .graph-stats small { font-size: 11px; color: var(--faint); font-weight: 400; }
 
   /* Sign-in */
-  #authScreen { padding-top: calc(var(--safe-top) + 64px); max-width: 400px; }
-  .brand { font-family: var(--display); font-weight: 700; font-size: 28px; text-align: center; margin-bottom: 22px; }
+  #authScreen { min-height: 100vh; min-height: 100dvh; padding: calc(var(--safe-top) + 24px) 16px 24px; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(1200px 600px at 10% -10%, #13254A 0%, transparent 60%), var(--bg); }
+  .auth-wrap { width: 100%; max-width: 920px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+  @media (min-width: 820px) { .auth-wrap { grid-template-columns: 1.1fr 1fr; } }
+  .auth-side { padding: 28px; background: linear-gradient(160deg, #0F1D38 0%, #0B1220 100%); border-bottom: 1px solid var(--line); }
+  @media (min-width: 820px) { .auth-side { border-bottom: 0; border-right: 1px solid var(--line); padding: 40px; } }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
+  .auth-side h2 { font-size: 24px; line-height: 1.25; margin: 26px 0 10px; max-width: 22ch; }
+  .auth-side p { color: var(--muted); margin: 0 0 18px; max-width: 42ch; }
+  .auth-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 13px; color: #B8C6DD; }
+  .auth-points li { display: flex; gap: 10px; align-items: center; }
+  .auth-points li::before { content: ''; width: 6px; height: 6px; background: var(--accent); flex: 0 0 auto; }
+  .auth-form { padding: 28px; }
+  @media (min-width: 820px) { .auth-form { padding: 40px; } }
+  .auth-form h2 { font-size: 20px; }
+  .auth-form .sub-title { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  @media (max-width: 819px) { .auth-points, .auth-side p { display: none; } .auth-side h2 { font-size: 18px; margin: 14px 0 0; } .auth-side { padding: 20px 24px; } }
+
+  /* Demo badge (demo-mode.js adds the element) */
+  .demo-badge { position: fixed; z-index: 40; right: 12px; bottom: calc(var(--nav-h) + var(--safe-bottom) + 10px); padding: 4px 9px; border-radius: 3px;
+    background: var(--amber-soft); color: var(--amber-text); border: 1px solid rgba(245,158,11,.45); font: 600 11px/1.4 var(--mono); letter-spacing: .04em; text-transform: uppercase; pointer-events: none; }
+  @media (min-width: 1024px) { .demo-badge { bottom: 16px; right: 16px; } }
+  body:has(#authScreen[style*="block"]) .demo-badge { bottom: 16px; }
 
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
 
-<div id="authScreen" class="container" style="display:none;">
-  <div class="brand">My Open Brain</div>
-  <div class="card">
-    <h2 id="authTitle" style="font-size:22px;">Sign in</h2>
-    <label for="authEmail">Email</label>
-    <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="email">
-    <label for="authPassword">Password</label>
-    <input type="password" id="authPassword" placeholder="••••••••" autocomplete="current-password">
-    <button id="authSubmit" style="width:100%; margin-top:18px;">Sign in</button>
-    <div id="authMsg"></div>
-    <div style="text-align:center; margin-top:14px;">
-      <button class="linkish" id="authToggle" type="button">Need an account? Sign up</button>
+<div id="authScreen" style="display:none;">
+  <div class="auth-wrap">
+    <div class="auth-side">
+      <div class="brand"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M4 18l5-6 4 3 7-9"/></svg></span>Open Brain</div>
+      <h2>Your notes, linked and measured.</h2>
+      <p>Capture thoughts, links and class notes. See how they connect, what needs review and where your knowledge is thin.</p>
+      <ul class="auth-points">
+        <li>Weekly activity and topic breakdown</li>
+        <li>Network map of linked notes</li>
+        <li>Search by meaning and keyword</li>
+      </ul>
+    </div>
+    <div class="auth-form">
+      <h2 id="authTitle">Sign in</h2>
+      <div class="sub-title">Use the account you created for your brain.</div>
+      <label for="authEmail">Email</label>
+      <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="email">
+      <label for="authPassword">Password</label>
+      <input type="password" id="authPassword" placeholder="••••••••" autocomplete="current-password">
+      <button id="authSubmit" style="width:100%; margin-top:18px;">Sign in</button>
+      <div id="authMsg"></div>
+      <div style="text-align:center; margin-top:10px;">
+        <button class="linkish" id="authToggle" type="button">Need an account? Sign up</button>
+      </div>
     </div>
   </div>
 </div>
 
-<div id="app" class="container" style="display:none;">
+<div id="app" style="display:none;">
+  <header class="topbar">
+    <div class="tb-brand"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M4 18l5-6 4 3 7-9"/></svg></span></div>
+    <div class="tb-crumb">Open Brain / <b id="tbCrumb">Today</b></div>
+    <div class="tb-right">
+      <span class="tb-date" id="tbDate"></span>
+      <span id="statusDot" class="dot" title="Connection"></span>
+      <span class="tb-user" id="tbUser" aria-hidden="true">·</span>
+      <button class="secondary" id="signOutBtn" type="button">Sign out</button>
+    </div>
+  </header>
+  <main class="main">
   <div class="offline-bar" role="status">You're offline. Showing your last saved copy. New thoughts save when you're back.</div>
 
   <!-- ===== TODAY ===== -->
   <section class="screen active" id="screen-today" aria-label="Today">
     <div class="screen-head">
-      <h1 id="greeting">Hello</h1>
-      <span id="statusDot" class="dot" title="Connection"></span>
+      <div><div class="eyebrow">Dashboard</div><h1 id="greeting">Hello</h1></div>
+      <div class="head-meta" id="statsAsOf"></div>
     </div>
+    <div class="kpis" id="kpis">
+      <button type="button" class="kpi" id="kpiWeek" data-go="thoughts">
+        <span class="kpi-label">Notes this week <span class="kpi-delta flat" id="kpiWeekDelta">—</span></span>
+        <span class="kpi-value" id="kpiWeekValue">—</span>
+        <span class="kpi-sub" id="kpiWeekSub">Last 7 days</span>
+        <svg class="kpi-spark" id="kpiWeekSpark" viewBox="0 0 96 30" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </button>
+      <button type="button" class="kpi" id="kpiLinks" data-go="graph">
+        <span class="kpi-label">Links</span>
+        <span class="kpi-value" id="kpiLinksValue">—</span>
+        <span class="kpi-sub" id="kpiLinksSub">Connections between notes</span>
+      </button>
+      <button type="button" class="kpi" id="kpiTopics" data-go="graph">
+        <span class="kpi-label">Topics</span>
+        <span class="kpi-value" id="kpiTopicsValue">—</span>
+        <span class="kpi-sub" id="kpiTopicsSub">Groups on your map</span>
+      </button>
+      <button type="button" class="kpi" id="kpiReview" data-go="review">
+        <span class="kpi-label">To review <span class="kpi-delta flat" id="kpiReviewFlag">—</span></span>
+        <span class="kpi-value" id="kpiReviewValue">—</span>
+        <span class="kpi-sub" id="kpiReviewSub">Page changes and plans</span>
+      </button>
+    </div>
+    <div class="dash-grid">
+    <div class="dash-main">
     <div class="card composer">
       <label for="quickText" style="margin-top:0;">New thought</label>
       <textarea id="quickText" placeholder="What's on your mind?" rows="3"></textarea>
       <div class="composer-actions">
-        <button class="secondary icon-btn" id="quickVoice" aria-label="Speak a thought" type="button"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg></button>
-        <button class="secondary icon-btn" id="quickLink" aria-label="Save a link or YouTube video" type="button"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>
-        <button class="secondary icon-btn" id="quickPdf" aria-label="Save a PDF" type="button"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg></button>
+        <button class="secondary icon-btn" id="quickVoice" aria-label="Speak a thought" type="button"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg></button>
+        <button class="secondary icon-btn" id="quickLink" aria-label="Save a link or YouTube video" type="button"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></button>
+        <button class="secondary icon-btn" id="quickPdf" aria-label="Save a PDF" type="button"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg></button>
         <button class="save" id="quickSave" type="button">Save</button>
       </div>
       <div id="quickMsg"></div>
     </div>
-    <div id="resurfaceWrap" style="display:none;">
-      <div class="section-title"><span>From your brain</span><button class="linkish" id="resurfaceNext" type="button">Another</button></div>
-      <div class="card resurface" id="resurface"></div>
-    </div>
     <div class="section-title"><span>Your plan</span></div>
     <div class="sub active" id="panel-today">
-    <div class="row" style="margin-bottom:8px;">
+    <div class="seg" style="margin-bottom:4px;">
       <button data-view="today">Today</button>
       <button data-view="week" class="secondary">This week</button>
     </div>
     <div id="plannerNotes"></div>
     <div id="plannerPush"></div>
-    <div id="plannerSummary"></div>
     <div id="plannerWaiting"></div>
     <div id="plannerSkipped"></div>
     <div id="plannerTimeline"></div>
     <div class="pl-day">Not scheduled yet</div>
     <div id="plannerTray"></div>
-    <div class="card" style="margin-top:16px;">
+    <div class="card" style="margin-top:14px;">
       <label for="plannerQuick" style="margin-top:0;">Add to your list</label>
       <div class="row">
         <input type="text" id="plannerQuick" placeholder="e.g. dentist Fri 3pm 30m" enterkeyhint="done">
         <button id="plannerQuickBtn" style="flex:0 0 auto;">Add</button>
       </div>
-      <div style="font-size:12px; color:#777; margin-top:6px;">Plain words work: a day and time put it on your calendar ("gym tomorrow 6pm 1h"), "by Thu" makes a due date, nothing = "Not scheduled yet".</div>
+      <div class="fine">Plain words work: a day and time put it on your calendar ("gym tomorrow 6pm 1h"), "by Thu" makes a due date, nothing = "Not scheduled yet".</div>
       <div id="plannerQuickMsg"></div>
       <details style="margin-top:8px;">
-        <summary style="cursor:pointer; font-size:13px; color:#999;">More options (pick the date, time, length or goal yourself)</summary>
-        <input type="text" id="plannerTitle" placeholder="e.g. Finish FIN 450 case study" style="margin-top:8px;">
+        <summary class="fine" style="min-height:32px; display:flex; align-items:center;">More options (pick the date, time, length or goal yourself)</summary>
+        <input type="text" id="plannerTitle" placeholder="e.g. Finish the case study" style="margin-top:8px;">
         <div class="row" style="margin-top:8px;">
           <input type="date" id="plannerDate" aria-label="Date">
           <input type="time" id="plannerTime" aria-label="Time (optional)">
@@ -319,46 +588,70 @@
           <select id="plannerGoal" aria-label="Goal"></select>
           <select id="plannerMinutes" aria-label="How long"></select>
         </div>
-        <div style="font-size:12px; color:#777; margin-top:6px;">With a time it goes on your timeline and Brain calendar for the length you pick. Date only = due date. No date = "Not scheduled yet".</div>
+        <div class="fine">With a time it goes on your timeline and Brain calendar for the length you pick. Date only = due date. No date = "Not scheduled yet".</div>
         <button id="plannerAddBtn" style="width:100%; margin-top:10px;">Add</button>
       </details>
     </div>
     <details class="card" style="margin-top:12px;">
-      <summary style="cursor:pointer; font-size:13px; color:#999;">Goals</summary>
+      <summary>Goals</summary>
       <div id="plannerGoalList"></div>
       <div class="row" style="margin-top:10px;">
         <input type="text" id="plannerNewGoal" placeholder="New goal, e.g. Fitness">
         <button id="plannerAddGoal" style="flex:0 0 auto;">Add goal</button>
       </div>
-      <div style="font-size:12px; color:#777; margin-top:6px;">Untick "show" to hide a goal from the list. Items already tagged keep it.</div>
+      <div class="fine">Untick "show" to hide a goal from the list. Items already tagged keep it.</div>
       <div id="plannerGoalMsg"></div>
     </details>
+    </div>
+    </div>
+    <aside class="dash-side">
+      <div class="panel">
+        <div class="panel-head"><span>Topic breakdown</span><span class="ph-meta" id="topicTotal"></span></div>
+        <table class="tbl" id="topicTable" aria-label="Notes and links per topic">
+          <thead><tr><th>Topic</th><th class="n">Notes</th><th class="n">Links</th><th style="width:30%">Share</th></tr></thead>
+          <tbody><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span>Recent notes</span><button class="linkish" type="button" data-go="thoughts" style="min-height:32px;">View all</button></div>
+        <table class="tbl" id="dashRecent" aria-label="Most recent notes">
+          <tbody><tr><td class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div id="resurfaceWrap" style="display:none;">
+        <div class="panel">
+          <div class="panel-head"><span>From your brain</span><button class="linkish" id="resurfaceNext" type="button" style="min-height:32px;">Another</button></div>
+          <div class="panel-body resurface" id="resurface"></div>
+        </div>
+      </div>
+    </aside>
     </div>
   </section>
 
   <!-- ===== JOBS ===== -->
   <section class="screen" id="screen-jobs" aria-label="Jobs">
-    <div class="screen-head"><h1>Jobs</h1></div>
-    <div class="sub active" id="panel-jobs">
+    <div class="screen-head"><div><div class="eyebrow">Pipeline</div><h1>Jobs</h1></div></div>
+    <div class="jobs-kpis" id="jobsKpis"></div>
+    <div class="sub active wrap-narrow" id="panel-jobs">
     <div id="jobsNotes"></div>
     <div id="jobsList"></div>
-    <div id="jobsCost" style="font-size:12px; color:#777; margin-top:12px;"></div>
+    <div id="jobsCost" class="fine" style="margin-top:12px;"></div>
     </div>
   </section>
 
   <!-- ===== CAPTURE ===== -->
   <section class="screen" id="screen-capture" aria-label="Capture">
-    <div class="screen-head"><h1>Capture</h1></div>
+    <div class="screen-head"><div><div class="eyebrow">Inputs</div><h1>Capture</h1></div></div>
     <div class="chips" role="tablist">
       <button class="chip active" data-sub="voice" type="button">Thought</button>
       <button class="chip" data-sub="url" type="button">Link</button>
       <button class="chip" data-sub="youtube" type="button">YouTube</button>
       <button class="chip" data-sub="pdf" type="button">PDF</button>
     </div>
-    <div class="sub active" id="panel-voice">
+    <div class="sub active wrap-narrow" id="panel-voice">
       <div class="card">
         <div class="mic-wrap">
-          <button class="mic-btn" id="micBtn" aria-label="Speak" type="button"><svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg></button>
+          <button class="mic-btn" id="micBtn" aria-label="Speak" type="button"><svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg></button>
           <div id="micStatus" class="hint">Tap to speak</div>
         </div>
         <label for="voiceTranscript">Your thought (type or speak, then review)</label>
@@ -367,50 +660,50 @@
         <div id="voiceMsg"></div>
       </div>
     </div>
-    <div class="sub" id="panel-url">
+    <div class="sub wrap-narrow" id="panel-url">
     <div class="card">
-      <label>Article URL</label>
+      <label for="urlInput" style="margin-top:0;">Article URL</label>
       <input type="text" id="urlInput" placeholder="https://example.com/article">
-      <div style="font-size:13px; color:#999; margin-top:8px;">
+      <div class="hint">
         Your browser can't fetch another site's article for security reasons — open the link, copy the text you want, and paste it below.
       </div>
-      <label>Paste article text</label>
+      <label for="urlText">Paste article text</label>
       <textarea id="urlText" style="min-height:150px;"></textarea>
       <button id="urlSaveBtn" style="width:100%; margin-top:12px;">Save to Library</button>
       <div id="urlMsg"></div>
     </div>
     </div>
-    <div class="sub" id="panel-youtube">
+    <div class="sub wrap-narrow" id="panel-youtube">
     <div class="card">
-      <label>YouTube URL</label>
+      <label for="ytUrl" style="margin-top:0;">YouTube URL</label>
       <input type="text" id="ytUrl" placeholder="https://www.youtube.com/watch?v=...">
       <button id="ytLoadBtn" style="margin-top:10px;">Load Video</button>
       <div id="ytPreview" style="margin-top:12px;"></div>
       <div id="ytTranscriptArea" style="display:none;">
         <label>Get Transcript</label>
-        <div style="font-size:13px; color:#999; margin-bottom:8px;">
+        <div class="hint" style="margin-bottom:8px;">
           Open the video, click the "..." below the video, choose "Show transcript", then copy it and paste below.
         </div>
         <a id="ytTranscriptLink" href="#" target="_blank"><button class="secondary" type="button">Open Video →</button></a>
-        <label>Paste transcript here</label>
+        <label for="ytTranscriptText">Paste transcript here</label>
         <textarea id="ytTranscriptText" placeholder="Paste the transcript text..."></textarea>
         <button id="ytSaveBtn" style="width:100%; margin-top:12px;">Save to Library</button>
       </div>
       <div id="ytMsg"></div>
     </div>
     </div>
-    <div class="sub" id="panel-pdf">
+    <div class="sub wrap-narrow" id="panel-pdf">
     <div class="card">
       <div class="drop-zone" id="pdfDropZone">
-        <div>Tap to choose a PDF<br><span style="font-size:14px;">or drop one here on a computer</span></div>
+        <div>Tap to choose a PDF<br><span class="fine">or drop one here on a computer</span></div>
         <input type="file" id="pdfInput" accept="application/pdf" style="display:none;">
       </div>
       <div id="pdfProgressWrap" style="display:none;">
-        <div id="pdfProgressLabel" style="font-size:13px; color:#999; margin-top:10px;">Extracting...</div>
+        <div id="pdfProgressLabel" class="hint" style="margin-top:10px;">Extracting...</div>
         <div class="progress-bar"><div class="progress-fill" id="pdfProgressFill" style="width:0%;"></div></div>
       </div>
       <div id="pdfReviewArea" style="display:none;">
-        <label>Extracted text (review before saving)</label>
+        <label for="pdfText">Extracted text (review before saving)</label>
         <textarea id="pdfText" style="min-height:200px;"></textarea>
         <label for="pdfCourse">Course (optional, e.g. BUS-485)</label>
         <input type="text" id="pdfCourse" placeholder="BUS-485" autocapitalize="characters">
@@ -424,7 +717,7 @@
 
   <!-- ===== STUDY ===== -->
   <section class="screen" id="screen-study" aria-label="Study">
-    <div class="screen-head"><h1>Study</h1></div>
+    <div class="screen-head"><div><div class="eyebrow">Learning</div><h1>Study</h1></div></div>
     <div class="chips" role="tablist">
       <button class="chip active" data-sub="gaps" type="button">Gaps</button>
       <button class="chip" data-sub="quiz" type="button">Quiz</button>
@@ -448,11 +741,13 @@
         <select id="libType" aria-label="Type"><option value="">All types</option></select>
         <select id="libTopic" aria-label="Topic"><option value="">All topics</option></select>
       </div>
-      <form class="search-row" id="libSearchForm" role="search">
-        <input type="search" id="libSearchInput" placeholder="Search your library..." enterkeyhint="search" aria-label="Search your library">
-        <button type="submit">Search</button>
-      </form>
-      <button id="libQuizBtn" class="secondary" type="button" style="width:100%; margin-top:10px;">Quiz me</button>
+      <div class="lib-tools">
+        <form class="search-row" id="libSearchForm" role="search">
+          <input type="search" id="libSearchInput" placeholder="Search your library..." enterkeyhint="search" aria-label="Search your library">
+          <button type="submit">Search</button>
+        </form>
+        <button id="libQuizBtn" class="secondary" type="button">Quiz me</button>
+      </div>
       <div id="libMeta" class="gq-meta" style="margin-top:12px;"></div>
       <div id="libMsg"></div>
       <div id="libReader" class="lib-reader" hidden></div>
@@ -462,26 +757,43 @@
 
   <!-- ===== BRAIN ===== -->
   <section class="screen" id="screen-brain" aria-label="Brain">
-    <div class="screen-head"><h1>Brain</h1></div>
+    <div class="screen-head"><div><div class="eyebrow">Knowledge</div><h1>Brain</h1></div></div>
     <div class="chips" role="tablist">
       <button class="chip active" data-sub="graph" type="button">Map</button>
       <button class="chip" data-sub="thoughts" type="button">Thoughts</button>
       <button class="chip" data-sub="review" type="button">Review</button>
     </div>
     <div class="sub active" id="panel-graph">
-      <div class="graph-wrap">
-        <canvas id="graphCanvas" role="img" aria-label="Map of your thoughts"></canvas>
-        <div class="graph-status" id="graphStatus" role="status"></div>
-        <div class="graph-note" id="graphNote" role="status"></div>
-        <div class="graph-tools">
-          <button class="graph-tool" id="graphLinks" type="button" aria-pressed="false">Strong links</button>
-          <button class="graph-tool icon-btn" id="graphFit" type="button" aria-label="Show the whole map">
-            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <div class="graph-toolbar">
+        <div class="gt-search">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+          <input type="search" id="graphSearch" placeholder="Find notes on the map…" aria-label="Find notes on the map" enterkeyhint="search" autocomplete="off">
+          <span id="graphSearchCount" role="status"></span>
         </div>
-        <div class="graph-sheet" id="graphSheet" aria-hidden="true"></div>
+        <label class="gt-min" for="graphMin">Min links <input type="range" id="graphMin" min="0" max="10" step="1" value="0"><output id="graphMinOut" for="graphMin">0</output></label>
+        <button class="graph-tool" id="graphLinks" type="button" aria-pressed="false">All links</button>
       </div>
-      <div class="chips graph-legend" id="graphLegend" aria-label="Topics"></div>
-      <div class="hint" style="margin-top:0;">Drag to turn your brain, pinch to zoom. Tap a dot to open that thought.</div>
+      <div class="chips graph-legend" id="graphLegend" aria-label="Topics (tap to show or hide)"></div>
+      <div class="graph-layout">
+        <div class="graph-wrap">
+          <canvas id="graphCanvas" role="img" aria-label="Network map of your notes"></canvas>
+          <div class="graph-status" id="graphStatus" role="status"></div>
+          <div class="graph-note" id="graphNote" role="status"></div>
+          <div class="graph-hover" id="graphHover" hidden></div>
+          <div class="graph-zoom">
+            <button type="button" id="graphZoomIn" aria-label="Zoom in"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+            <button type="button" id="graphZoomOut" aria-label="Zoom out"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+            <button type="button" id="graphFit" aria-label="Reset view"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+          </div>
+          <div class="graph-sheet" id="graphSheet" aria-hidden="true"></div>
+        </div>
+        <aside class="panel graph-side" aria-label="Most connected notes">
+          <div class="panel-head"><span>Most connected</span><span class="ph-meta">links</span></div>
+          <ol id="graphRank"></ol>
+          <dl class="graph-stats" id="graphStats"></dl>
+        </aside>
+      </div>
+      <div class="hint">Hover a dot for a preview (tap on a phone); click to open it. Scroll or pinch to zoom, drag to pan. Topic chips show or hide groups.</div>
     </div>
     <div class="sub" id="panel-thoughts">
     <div class="sub active" id="panel-search">
@@ -490,29 +802,45 @@
         <button id="searchBtn" type="submit">Search</button>
       </form>
       <button class="linkish" id="searchClearBtn" type="button" style="display:none;">Clear search</button>
-      <div id="searchResults"></div>
+      <div id="searchResults" class="list"></div>
     </div>
     <div class="sub active" id="panel-recent">
-      <div class="section-title"><span>Recent</span></div>
-      <div id="recentList"></div>
+      <div class="section-title"><span>Recent</span><span class="head-meta" id="recentCount"></span></div>
+      <div id="recentList" class="list"></div>
     </div>
     </div>
-    <div class="sub" id="panel-review"></div>
-    <button class="secondary" id="signOutBtn" style="width:100%; margin-top:24px;">Sign out</button>
+    <div class="sub wrap-narrow" id="panel-review"></div>
   </section>
+  </main>
 </div>
 
-<nav class="tabbar" id="tabbar" aria-label="Main" style="display:none;">
-  <button data-screen="today" class="active" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>Today</span></button>
-  <button data-screen="jobs" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="17" height="13" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3.5 12.5h17"/></svg><span>Jobs</span></button>
-  <button data-screen="capture" class="capture" type="button" aria-label="Capture"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Capture</span></button>
+<nav class="sidebar" id="tabbar" aria-label="Main" style="display:none;">
+  <div class="sb-brand"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M4 18l5-6 4 3 7-9"/></svg></span><div>Open Brain<small>Knowledge desk</small></div></div>
+  <div class="sb-group">Workspace</div>
+  <button data-screen="today" class="active" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="7" height="7" rx="1"/><rect x="13.5" y="4" width="7" height="4" rx="1"/><rect x="13.5" y="11" width="7" height="9" rx="1"/><rect x="3.5" y="14" width="7" height="6" rx="1"/></svg><span>Today</span></button>
+  <button data-screen="jobs" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="17" height="13" rx="2"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3.5 12.5h17"/></svg><span>Jobs</span><span class="sb-badge" id="sbJobs"></span></button>
+  <button data-screen="capture" class="capture" type="button" aria-label="Capture"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Capture</span></button>
+  <div class="sb-group">Knowledge</div>
   <button data-screen="study" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg><span>Study</span></button>
-  <button data-screen="brain" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="7" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="17" r="3"/><path d="M8 8.5l2.5 6M16.5 8l-3 6.5M8.5 7h7"/></svg><span>Brain</span></button>
+  <div class="sb-subs">
+    <button type="button" data-go="gaps">Gaps</button>
+    <button type="button" data-go="quiz">Quiz</button>
+    <button type="button" data-go="library">Library</button>
+  </div>
+  <button data-screen="brain" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="7" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="17" r="3"/><path d="M8 8.5l2.5 6M16.5 8l-3 6.5M8.5 7h7"/></svg><span>Brain</span><span class="sb-badge" id="sbReview"></span></button>
+  <div class="sb-subs">
+    <button type="button" data-go="graph">Map</button>
+    <button type="button" data-go="thoughts">Thoughts</button>
+    <button type="button" data-go="review">Review</button>
+  </div>
+  <div class="sb-foot" id="sbFoot">Signed in</div>
 </nav>
 
 <!-- pdf.js now loads only when you pick a PDF (see shell.js), so the app opens faster on a phone -->
 <script src="planner.js"></script>
 <script src="jobs.js"></script>
+<!-- DEMO MODE: fake in-memory data, no real Supabase calls. Delete this one line (and demo-mode.js) to use real data. -->
+<script src="demo-mode.js"></script>
 <script>
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUser = null;
@@ -811,7 +1139,7 @@ document.getElementById('urlSaveBtn').addEventListener('click', async () => {
 
 function renderThoughtCards(container, thoughts) {
   if (!thoughts || thoughts.length === 0) {
-    container.innerHTML = '<div style="color:#777; text-align:center; padding:20px;">Nothing here yet.</div>';
+    container.innerHTML = '<div class="empty">Nothing here yet.</div>';
     return;
   }
   container.innerHTML = thoughts.map(t => `
@@ -826,7 +1154,7 @@ function renderThoughtCards(container, thoughts) {
 // capture, show the passage that matched under the start of the document.
 function renderSearchResults(container, results) {
   if (!results || results.length === 0) {
-    container.innerHTML = '<div style="color:#777; text-align:center; padding:20px;">No matches.</div>';
+    container.innerHTML = '<div class="empty">No matches.</div>';
     return;
   }
   container.innerHTML = results.map(t => {
@@ -837,7 +1165,7 @@ function renderSearchResults(container, results) {
       <div class="thought-content">${escapeHtml(t.content.slice(0, t.matched_chunk ? 200 : 500))}${(t.matched_chunk ? t.content_length > 200 : long) ? '…' : ''}</div>
       ${t.matched_chunk ? `
       <div class="thought-meta" style="margin-top:10px;">Matched passage (from partway through a longer capture):</div>
-      <div class="thought-content" style="border-left:3px solid #444; padding-left:10px; color:#ccc;">${escapeHtml(t.matched_chunk)}</div>` : ''}
+      <div class="thought-content" style="border-left:2px solid var(--line-3); padding-left:10px; color:var(--muted);">${escapeHtml(t.matched_chunk)}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -856,7 +1184,7 @@ document.getElementById('searchForm').addEventListener('submit', async (e) => {
   document.activeElement && document.activeElement.blur();   // close the phone keyboard
   document.getElementById('panel-recent').classList.remove('active');
   document.getElementById('searchClearBtn').style.display = 'inline-flex';
-  resultsEl.innerHTML = '<div style="color:#777; text-align:center; padding:20px;">Searching…</div>';
+  resultsEl.innerHTML = '<div class="empty">Searching…</div>';
   try {
     // Level 8: hybrid search (meaning + keywords + chunks) runs on the server,
     // because it needs an embedding and the AI key can't live in this page.
@@ -884,6 +1212,7 @@ async function loadRecent() {
       .order('created_at', { ascending: false }).limit(20);
     if (error) throw error;
     renderThoughtCards(listEl, data);
+    const rc = document.getElementById('recentCount'); if (rc) rc.textContent = data.length ? `${data.length} latest` : '';
     // Offline copy: first 600 characters of each, never whole transcripts.
     obCache.put('recent', data.map(t => ({ id: t.id, created_at: t.created_at, content: String(t.content || '').slice(0, 600) })));
   } catch (err) {

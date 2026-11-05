@@ -26,10 +26,10 @@
     let t = $('obToast');
     if (!t) {
       t = document.createElement('div'); t.id = 'obToast'; t.setAttribute('role', 'status');
-      t.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);z-index:30;bottom:calc(env(safe-area-inset-bottom,0px) + 92px);max-width:calc(100% - 40px);padding:12px 16px;border-radius:16px;font-size:15px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.4);transition:opacity .2s;';
+      t.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);z-index:30;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);max-width:calc(100% - 32px);padding:10px 14px;border-radius:6px;font-size:14px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.45);transition:opacity .2s;border:1px solid;';
       document.body.appendChild(t);
     }
-    t.style.background = ok ? '#14301F' : '#331816'; t.style.color = ok ? '#4ADE80' : '#FCA5A5';
+    t.style.background = ok ? '#0F2A1C' : '#2A1416'; t.style.color = ok ? '#4ADE80' : '#FCA5A5'; t.style.borderColor = ok ? 'rgba(34,197,94,.35)' : 'rgba(248,113,113,.35)';
     t.textContent = text; t.style.opacity = '1';
     clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = '0'; }, 2600);
   }
@@ -150,9 +150,13 @@
   const lastSub = { capture: 'voice', study: 'gaps', brain: 'graph' };
   const scrollPos = {};
   const current = { screen: 'today', sub: null };
+  const CRUMB = { today: 'Today', jobs: 'Jobs', capture: 'Capture', study: 'Study', brain: 'Brain' };
+  const SUB_NAME = { voice: 'Thought', url: 'Link', youtube: 'YouTube', pdf: 'PDF', gaps: 'Gaps', quiz: 'Quiz', library: 'Library', graph: 'Map', thoughts: 'Thoughts', review: 'Review' };
 
   function load(screen, sub) {
     if (screen === 'today' && window.loadPlanner) loadPlanner();
+    if (screen === 'today') loadDashboard();
+    if (screen === 'jobs') loadJobsKpis();
     if (screen === 'jobs' && window.loadJobs) loadJobs();
     if (screen === 'study' && sub === 'gaps' && window.loadGaps) loadGaps(false);
     if (screen === 'study' && sub === 'quiz' && window.loadQuiz) loadQuiz(false);
@@ -183,6 +187,9 @@
       scr.querySelectorAll(':scope > .sub').forEach(p => p.classList.toggle('active', p.id === 'panel-' + sub));
     }
     current.screen = screen; current.sub = sub;
+    document.querySelectorAll('#tabbar [data-go]').forEach(b => b.classList.toggle('active', b.dataset.go === sub));
+    const crumb = $('tbCrumb');
+    if (crumb) crumb.textContent = CRUMB[screen] + (sub && SUB_NAME[sub] ? ' / ' + SUB_NAME[sub] : '');
 
     const hash = '#' + (sub || screen);
     if (location.hash !== hash) history.replaceState(null, '', hash);
@@ -209,6 +216,11 @@
     go(b.dataset.screen);
   }));
   document.querySelectorAll('.chip[data-sub]').forEach(c => c.addEventListener('click', () => go(c.dataset.sub)));
+  // Sidebar sub-links, dashboard tiles and "View all" links: <button data-go="graph"> etc.
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-go]');
+    if (b && SCREEN_OF[b.dataset.go]) go(b.dataset.go, { top: true });
+  });
   window.addEventListener('hashchange', () => {
     const job = /^#jobs\/./.test(location.hash);
     const h = splitHash(location.hash);
@@ -328,6 +340,135 @@
   $('resurface').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openResurface(); } });
   $('resurfaceNext').addEventListener('click', showResurface);
 
+  // ---------- Dashboard (design v5): stat tiles, topic table, recent notes ----------
+  // Every number comes from your own data (same tables and brain_graph() the map uses).
+  const DASH_COLORS = ['#3B82F6', '#14B8A6', '#F59E0B', '#A78BFA', '#22C55E', '#F472B6', '#38BDF8', '#F97316', '#94A3B8', '#E879F9'];
+  const fmtN = (n) => Number(n || 0).toLocaleString();
+  function topbar() {
+    const d = $('tbDate');
+    if (d) d.textContent = new Date().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    const email = (currentUser && currentUser.email) || '';
+    const name = (currentUser && currentUser.user_metadata && currentUser.user_metadata.first_name) || email;
+    if ($('tbUser')) $('tbUser').textContent = (String(name).trim()[0] || '·').toUpperCase();
+    if ($('sbFoot')) $('sbFoot').textContent = email ? `Signed in as ${email}` : 'Signed in';
+  }
+  function setText(id, text) { const el = $(id); if (el) el.textContent = text; }
+  function delta(id, cur, prev) {
+    const el = $(id); if (!el) return;
+    const diff = cur - prev;
+    el.className = 'kpi-delta ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat');
+    el.textContent = prev ? `${diff >= 0 ? '+' : ''}${Math.round(diff / prev * 100)}%` : (cur ? 'new' : '0');
+    el.title = `${cur} this week vs ${prev} the week before`;
+  }
+  function spark(id, counts) {
+    const svg = $(id); if (!svg) return;
+    const max = Math.max(1, ...counts), w = 96 / counts.length;
+    svg.innerHTML = counts.map((c, i) => {
+      const h = Math.max(1.5, c / max * 28);
+      return `<rect class="${i >= counts.length - 7 ? 'hi' : ''}" x="${(i * w + 1).toFixed(1)}" y="${(30 - h).toFixed(1)}" width="${(w - 2).toFixed(1)}" height="${h.toFixed(1)}" rx="0.5"><title>${c}</title></rect>`;
+    }).join('');
+  }
+  let dashBusy = false;
+  async function loadDashboard() {
+    if (dashBusy || !currentUser) return;
+    dashBusy = true;
+    try {
+      const now = Date.now(), d14 = new Date(now - 14 * 864e5);
+      d14.setHours(0, 0, 0, 0);
+      const [recent, total, linkCount, graph, pages, plans, checks] = await Promise.all([
+        sb.from('thoughts').select('id, created_at, summary, content, category').is('archived_at', null)
+          .gte('created_at', d14.toISOString()).order('created_at', { ascending: false }).limit(1000),
+        sb.from('thoughts').select('id', { count: 'exact', head: true }).is('archived_at', null),
+        sb.from('thought_links').select('id', { count: 'exact', head: true }),
+        sb.rpc('brain_graph'),
+        sb.from('brain_proposals').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        sb.from('bc_proposals').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        sb.from('bc_checkins').select('id', { count: 'exact', head: true }).is('answer', null),
+      ].map(p => Promise.resolve(p).catch(err => ({ error: err }))));
+
+      // Notes this week + 14-day bars
+      const rows = recent.data || [];
+      const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+      const counts = Array.from({ length: 14 }, () => 0);
+      for (const r of rows) {
+        const i = 13 - Math.floor((dayStart.getTime() + 864e5 - new Date(r.created_at).getTime() - 1) / 864e5);
+        if (i >= 0 && i < 14) counts[i]++;
+      }
+      const week = counts.slice(7).reduce((a, b) => a + b, 0), prev = counts.slice(0, 7).reduce((a, b) => a + b, 0);
+      if (!recent.error) {
+        setText('kpiWeekValue', fmtN(week)); delta('kpiWeekDelta', week, prev); spark('kpiWeekSpark', counts);
+        setText('kpiWeekSub', `${fmtN(prev)} the week before`);
+      }
+      // Links
+      const notes = total.count || 0, links = linkCount.count || 0;
+      if (!linkCount.error) {
+        setText('kpiLinksValue', fmtN(links));
+        setText('kpiLinksSub', notes ? `${(links * 2 / notes).toFixed(1)} per note · ${fmtN(notes)} notes` : 'Connections between notes');
+      }
+      // Topics + topic table
+      const g = graph.data;
+      if (g && !graph.error) {
+        const clusters = (g.clusters || []).slice().sort((a, b) => a.id - b.id).map((c, i) => ({ ...c, color: DASH_COLORS[i % DASH_COLORS.length], n: 0, l: 0 }));
+        const byC = new Map(clusters.map(c => [c.id, c]));
+        const nodeC = new Map((g.nodes || []).map(nd => [nd.id, nd.c1]));
+        for (const nd of g.nodes || []) { const c = byC.get(nd.c1); if (c) c.n++; }
+        for (const [a, b] of g.edges || []) { const ca = byC.get(nodeC.get(a)), cb = byC.get(nodeC.get(b)); if (ca) ca.l++; if (cb && cb !== ca) cb.l++; }
+        const totalN = clusters.reduce((s, c) => s + c.n, 0) || 1;
+        const sorted = clusters.filter(c => c.n).sort((a, b) => b.n - a.n);
+        setText('kpiTopicsValue', fmtN(sorted.length));
+        setText('kpiTopicsSub', sorted[0] ? `Largest: ${sorted[0].name} (${Math.round(sorted[0].n / totalN * 100)}%)` : 'Groups on your map');
+        setText('topicTotal', `${fmtN(totalN)} notes`);
+        const tb = document.querySelector('#topicTable tbody');
+        if (tb) tb.innerHTML = sorted.length ? sorted.map(c => `<tr data-go="graph" title="Open the map">
+            <td><span class="t-topic"><span class="gs-dot" style="background:${c.color}"></span>${esc(c.name)}</span></td>
+            <td class="n">${fmtN(c.n)}</td><td class="n">${fmtN(c.l)}</td>
+            <td><span class="share" aria-label="${Math.round(c.n / totalN * 100)}%"><span style="width:${(c.n / totalN * 100).toFixed(1)}%; background:${c.color}"></span></span></td></tr>`).join('')
+          : '<tr><td colspan="4" class="empty">No topics yet.</td></tr>';
+      }
+      // Items to review
+      const nPages = pages.count || 0, nPlans = (plans.count || 0) + (checks.count || 0);
+      const review = nPages + nPlans;
+      setText('kpiReviewValue', fmtN(review));
+      setText('kpiReviewSub', `${fmtN(nPages)} page ${nPages === 1 ? 'change' : 'changes'} · ${fmtN(nPlans)} plan ${nPlans === 1 ? 'item' : 'items'}`);
+      const flag = $('kpiReviewFlag');
+      if (flag) { flag.className = 'kpi-delta ' + (review ? 'warn' : 'up'); flag.textContent = review ? 'Action' : 'Clear'; }
+      $('kpiReview') && $('kpiReview').classList.toggle('alert', review > 0);
+      setText('sbReview', nPages ? String(nPages) : '');
+      // Recent notes table
+      const tbr = document.querySelector('#dashRecent tbody');
+      if (tbr && !recent.error) {
+        tbr.innerHTML = rows.length ? rows.slice(0, 6).map(r => `<tr data-go="thoughts">
+            <td class="n" style="width:1%; white-space:nowrap; text-align:left; color:var(--muted);">${esc(new Date(r.created_at).toLocaleDateString([], { month: 'short', day: '2-digit' }))}</td>
+            <td class="t-text">${esc(r.summary || String(r.content || '').slice(0, 140))}</td></tr>`).join('')
+          : '<tr><td class="empty">No notes in the last 14 days.</td></tr>';
+      }
+      setText('statsAsOf', `As of ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`);
+    } catch (err) {
+      console.warn('Dashboard:', err);
+    } finally { dashBusy = false; }
+  }
+
+  async function loadJobsKpis() {
+    const box = $('jobsKpis');
+    if (!box || !currentUser) return;
+    try {
+      const { data, error } = await sb.from('bc_jobs').select('status,score').limit(1000);
+      if (error) throw error;
+      const jobs = data || [];
+      const by = (s) => jobs.filter(j => s.includes(j.status)).length;
+      const scored = jobs.filter(j => j.score != null);
+      const avg = scored.length ? scored.reduce((a, j) => a + Number(j.score), 0) / scored.length : 0;
+      const tiles = [
+        ['New matches', by(['new']), 'Waiting for a look'],
+        ['Applied', by(['applied']), 'Sent, no reply yet'],
+        ['Interviewing', by(['interviewing', 'offer']), 'Active conversations'],
+        ['Avg score', scored.length ? avg.toFixed(1) : '—', `${fmtN(scored.length)} scored openings`],
+      ];
+      box.innerHTML = tiles.map(([l, v, s]) => `<div class="kpi"><span class="kpi-label">${esc(l)}</span><span class="kpi-value">${esc(String(v))}</span><span class="kpi-sub">${esc(s)}</span></div>`).join('');
+      setText('sbJobs', by(['new']) ? String(by(['new'])) : '');
+    } catch (err) { box.innerHTML = ''; }
+  }
+
   // ---------- connection changes ----------
   window.addEventListener('online', () => { updateOutboxBadge(); flushOutbox(); if (currentUser) load(current.screen, current.sub); checkConnection(); });
   window.addEventListener('offline', () => { updateOutboxBadge(); const d = $('statusDot'); if (d) d.className = 'dot off'; });
@@ -337,6 +478,7 @@
     onSignedIn() {
       $('tabbar').style.display = '';
       greet();
+      topbar();
       if (!navigator.onLine) { const d = $('statusDot'); if (d) d.className = 'dot off'; }
       updateOutboxBadge();
       routeFromHash();

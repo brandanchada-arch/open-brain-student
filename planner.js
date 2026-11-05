@@ -200,7 +200,7 @@ function plannerSummaryHtml(res, esc) {
     <div class="pl-when">${w.kind ? `<span class="pl-chip">${esc(String(w.kind).slice(0, 30))}</span> ` : ''}${esc(when(w.created_at))}</div></div></div>`).join('');
   // Already delivered and nothing waiting: keep it folded away, like "Notifications: on".
   if (s && s.delivered === true && !waiting.length) {
-    return `<details class="card" style="margin-bottom:8px;"><summary style="cursor:pointer; font-size:13px; color:#999;">Morning summary${when(s.created_at) ? ' · ' + esc(when(s.created_at)) : ''}</summary>${body}</details>`;
+    return `<details class="card" style="margin-bottom:8px;"><summary style="cursor:pointer; font-size:13px; color:var(--muted);">Morning summary${when(s.created_at) ? ' · ' + esc(when(s.created_at)) : ''}</summary>${body}</details>`;
   }
   return (s ? `<div class="pl-day">Morning summary${when(s.created_at) ? ` <span style="text-transform:none; font-weight:400;">${esc(when(s.created_at))}</span>` : ''}</div>${body}` : '') +
     (waiting.length ? `<div class="pl-day">Still waiting</div>${list}` : '');
@@ -548,6 +548,8 @@ if (typeof document !== 'undefined') {
   }
 
   async function plannerRenderPush(refresh) {
+    // Demo mode (demo-mode.js): no push subscribe at all.
+    if (window.OB_DEMO) { el('plannerPush').innerHTML = '<div class="pl-item"><div class="pl-body"><div class="pl-when">Notifications are off in demo mode.</div></div></div>'; return; }
     const d = plannerDevice();
     let sub = null;
     try { const reg = d.supported ? await plannerSwReg() : null; sub = reg ? await reg.pushManager.getSubscription() : null; } catch { /* no service worker (preview) */ }
@@ -558,11 +560,12 @@ if (typeof document !== 'undefined') {
       (s.canTest ? '<button class="secondary" id="plannerPushTest">Send test</button><button class="secondary" id="plannerPushOff">Turn off here</button>' : '');
     const html = `<div class="pl-body"><div class="pl-when">${esc(s.text)}</div>${buttons ? `<div class="pl-actions">${buttons}</div>` : ''}<div id="plannerPushMsg"></div></div>`;
     el('plannerPush').innerHTML = s.canTest
-      ? `<details class="card" style="margin-bottom:8px;"><summary style="cursor:pointer; font-size:13px; color:#999;">Notifications: on</summary>${html}</details>`
+      ? `<details class="card" style="margin-bottom:8px;"><summary style="cursor:pointer; font-size:13px; color:var(--muted);">Notifications: on</summary>${html}</details>`
       : `<div class="pl-item">${html}</div>`;
   }
 
   async function plannerPushOn() {
+    if (window.OB_DEMO) return;
     const msg = t => { const m = el('plannerPushMsg'); if (m) m.innerHTML = t; };
     try {
       const perm = await Notification.requestPermission();
