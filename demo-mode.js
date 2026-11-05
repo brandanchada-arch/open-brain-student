@@ -600,6 +600,20 @@
   window.supabase = { createClient: () => client };
   window.obDemo = { db: DB, topics: TOPICS, colors: TOPIC_COLORS };
 
+  // ---------- Study tab: a saved set of gap questions and a quiz, as if fetched earlier ----------
+  try {
+    if (!localStorage.getItem('ob.gaps.last')) localStorage.setItem('ob.gaps.last', JSON.stringify({ at: NOW - 2 * 3600e3, idx: 0, questions: [
+      { q: 'You set a 4-month emergency fund target. What is that in dollars, and by when?', why: 'Emergency fund target note' },
+      { q: 'What happened after the first-round interview?', why: '14 applications note' },
+      { q: 'Which REIT did you compare, and what was its payout ratio?', why: 'REITs note' },
+    ] }));
+    if (!localStorage.getItem('ob.quiz.last')) localStorage.setItem('ob.quiz.last', JSON.stringify({ at: NOW - 3600e3, idx: 1, questions: [
+      { course: 'FIN-301', q: 'Why does WACC use market weights instead of book weights?', a: 'Investors price capital at what it is worth today, not at historical accounting values.', shown: true, result: 'got' },
+      { course: 'STAT-220', q: 'What does a p-value tell you?', a: 'The chance of data this extreme if the null hypothesis were true. Not the chance the hypothesis is true.' },
+      { course: 'ACC-210', q: 'What is the journal entry for accrued revenue?', a: 'Debit accounts receivable, credit revenue.' },
+    ] }));
+  } catch { /* private mode */ }
+
   // ---------- "Demo data" badge ----------
   function badge() {
     if (document.getElementById('demoBadge')) return;

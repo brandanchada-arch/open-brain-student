@@ -173,7 +173,7 @@
     G.dpr = Math.min(window.devicePixelRatio || 1, 2);
     G.W = r.width; G.H = r.height;
     const c = $('graphCanvas'); c.width = Math.round(G.W * G.dpr); c.height = Math.round(G.H * G.dpr);
-    if (firstSize && G.nodes.length) fit(false);
+    if ((firstSize || !G.touched) && G.nodes.length) fit(false);
     wake();
   }
 
@@ -200,6 +200,7 @@
     animate ? animateTo(v) : (Object.assign(G, v), wake());
   }
   function zoomAt(f, sx = G.W / 2, sy = G.H / 2) {
+    G.touched = true;
     const k = Math.max(0.15, Math.min(8, G.k * f));
     const w = toWorld(sx, sy);
     G.k = k; G.tx = sx - w.x * k; G.ty = sy - w.y * k;
@@ -478,12 +479,12 @@
       const k = Math.max(0.15, Math.min(8, G.pinch.k * d / G.pinch.d));
       const w = { x: (G.pinch.mid.x - G.pinch.tx) / G.pinch.k, y: (G.pinch.mid.y - G.pinch.ty) / G.pinch.k };
       G.k = k; G.tx = mid.x - w.x * k; G.ty = mid.y - w.y * k;
-      G.moved = true; wake(); return;
+      G.moved = true; G.touched = true; wake(); return;
     }
     if (G.pan && G.pointers.has(e.pointerId)) {
       const dx = p.x - G.pan.x, dy = p.y - G.pan.y;
       if (Math.abs(dx) + Math.abs(dy) > 4) G.moved = true;
-      if (G.moved) { G.tx = G.pan.tx + dx; G.ty = G.pan.ty + dy; if (G.hover && e.pointerType === 'mouse') showHover(null); wake(); }
+      if (G.moved) { G.touched = true; G.tx = G.pan.tx + dx; G.ty = G.pan.ty + dy; if (G.hover && e.pointerType === 'mouse') showHover(null); wake(); }
       return;
     }
     if (e.pointerType === 'mouse') {
@@ -519,7 +520,7 @@
     }, { passive: false });
     $('graphZoomIn').addEventListener('click', () => zoomAt(1.35));
     $('graphZoomOut').addEventListener('click', () => zoomAt(1 / 1.35));
-    $('graphFit').addEventListener('click', () => { select(null); showHover(null); fit(); });
+    $('graphFit').addEventListener('click', () => { select(null); showHover(null); G.touched = false; fit(); });
     $('graphLegend').addEventListener('click', (e) => {
       if (e.target.closest('[data-topic-all]')) { G.hidden.clear(); renderLegend(); filtersChanged(); return; }
       const b = e.target.closest('[data-topic]'); if (!b) return;
