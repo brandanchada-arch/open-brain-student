@@ -346,7 +346,12 @@
     .graph-wrap { height: clamp(460px, 68vh, 720px); }
     #authScreen { max-width: 440px; }
   }
+  @media (max-width: 979px) {
+    .demo-badge { top: auto; right: 12px; bottom: calc(var(--safe-bottom) + var(--nav-h) + 20px); font-size: 11.5px; padding: 3px 10px; opacity: .95; }
+    #app { padding-top: calc(var(--safe-top) + 22px); }
+  }
   @media (max-width: 520px) {
+    .graph-legend { flex-wrap: nowrap; overflow-x: auto; margin-left: -16px; margin-right: -16px; padding: 2px 16px; }
     .graph-toolbar { grid-template-columns: 1fr; }
     .graph-min input { width: auto; flex: 1; }
     .graph-wrap { height: min(66vh, 560px); min-height: 340px; }

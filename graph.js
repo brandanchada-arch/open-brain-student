@@ -305,7 +305,7 @@
     if (!list.length || !G.W) return;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const n of list) { x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x); y1 = Math.max(y1, n.y); }
-    const padX = 60, padY = 70;
+    const padX = G.W < 520 ? 24 : 60, padY = G.W < 520 ? 50 : 70;
     const k = Math.max(K_MIN, Math.min(maxK, Math.min((G.W - padX * 2) / Math.max(1, x1 - x0), (G.H - padY * 2) / Math.max(1, y1 - y0))));
     const to = { k, x: G.W / 2 - ((x0 + x1) / 2) * k, y: G.H / 2 - ((y0 + y1) / 2) * k + 8 };
     if (animate) animateTo(to); else { G.view = to; wake(); }
