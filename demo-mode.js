@@ -566,7 +566,9 @@
   const auth = {
     onAuthStateChange(cb) {
       listeners.add(cb);
-      setTimeout(() => cb(session ? 'INITIAL_SESSION' : 'SIGNED_OUT', session), 0);
+      // Like the real client this answers later, but only once every script on the page has loaded.
+      const fire = () => setTimeout(() => cb(session ? 'INITIAL_SESSION' : 'SIGNED_OUT', session), 0);
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fire, { once: true }); else fire();
       return { data: { subscription: { unsubscribe() { listeners.delete(cb); } } } };
     },
     async getSession() { return { data: { session }, error: null }; },

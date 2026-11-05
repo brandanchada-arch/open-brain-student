@@ -111,7 +111,7 @@
     G.maxDeg = nodes.reduce((m, n) => Math.max(m, n.deg), 0);
     const degs = nodes.map(n => n.deg).sort((a, b) => b - a);
     const hubCut = Math.max(4, degs[Math.floor(degs.length * 0.06)] || 4);
-    for (const n of nodes) { n.hub = n.deg >= hubCut; n.r = 3.4 + Math.sqrt(n.deg) * 2.3; }
+    for (const n of nodes) { n.hub = n.deg >= hubCut; n.r = 4.6 + Math.sqrt(n.deg) * 2.6; }
     for (const c of G.cById.values()) c.size = nodes.filter(n => n.c1 === c.id).length;
     placeClusters();
     const fresh = nodes.filter(n => n.fresh);
