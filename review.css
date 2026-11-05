@@ -7,7 +7,7 @@
 
 .rv-card { margin-bottom: 12px; }
 .rv-warn {
-  background: #331816; color: #FCA5A5; border-radius: 12px; padding: 10px 12px;
+  background: rgba(251,113,133,.08); color: #FECDD3; border: 1px solid rgba(251,113,133,.4); border-radius: 12px; padding: 10px 12px;
   font-size: 14px; font-weight: 600; line-height: 1.4; margin: 4px 0 10px;
 }
 .rv-reason { font-size: 15px; line-height: 1.45; margin-bottom: 10px; }

@@ -7,15 +7,15 @@
 .ask-used { margin-top: 12px; }
 .ask-sources { list-style: none; margin: 0; padding: 0; font-size: 14px; line-height: 1.45; }
 .ask-sources li { padding: 4px 0; border-top: 1px solid var(--line); }
-.ask-ref { font-weight: 700; color: #F2B35E; margin-right: 4px; }
-.ask-kind { display: inline-block; font-size: 12px; font-weight: 600; background: #22283A; color: var(--blue, #9DB4FF); border-radius: 999px; padding: 1px 8px; margin-right: 4px; }
-.ask-kind.ask-old { background: var(--accent-soft); color: #F7CB8C; }
+.ask-ref { font-weight: 700; color: var(--accent); margin-right: 4px; }
+.ask-kind { display: inline-block; font-size: 12px; font-weight: 600; background: rgba(147,180,255,.1); color: var(--blue, #9DB4FF); border-radius: 999px; padding: 1px 8px; margin-right: 4px; }
+.ask-kind.ask-old { background: rgba(251,191,36,.12); color: #FDE68A; }
 .ask-date { color: var(--muted); font-size: 13px; }
 
 /* ---------- Edit notes (edit-thought.js) ---------- */
 .et-bar { display: flex; justify-content: flex-end; margin: 4px -4px -10px 0; }
 .et-bar .linkish { min-height: 36px; font-size: 14px; }
-.et-badge { display: inline-block; font-size: 12px; font-weight: 600; background: var(--accent-soft); color: #F7CB8C; border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
+.et-badge { display: inline-block; font-size: 12px; font-weight: 600; background: var(--accent-soft); color: #D6CCFF; border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
 .et-editor textarea { width: 100%; min-height: 140px; margin-top: 6px; font-size: 15px; line-height: 1.45; }
 .et-check { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text); margin: 12px 0 6px; }
 .et-check input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
@@ -26,9 +26,9 @@
 .et-actions { display: flex; gap: 8px; margin-top: 12px; }
 .et-actions button { flex: 1; }
 .et-toast { position: fixed; left: 16px; right: 16px; bottom: calc(90px + env(safe-area-inset-bottom, 0px)); z-index: 50; max-width: 480px; margin: 0 auto;
-  background: #14301F; color: var(--ok, #6EE7A0); padding: 12px 16px; border-radius: 14px; font-size: 14px; font-weight: 600; text-align: center; }
-.et-toast.err { background: #331816; color: #FCA5A5; }
+  background: rgba(6,24,18,.95); border: 1px solid rgba(74,222,128,.45); color: var(--ok, #6EE7A0); padding: 12px 16px; border-radius: 14px; font-size: 14px; font-weight: 600; text-align: center; }
+.et-toast.err { background: rgba(30,8,14,.95); border-color: rgba(251,113,133,.5); color: #FECDD3; }
 
 /* ---------- Door check flag in the Library reader (door-flag.js) ---------- */
-.door-flag { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: var(--accent-soft); color: #F7CB8C; font-size: 14px; line-height: 1.45; }
+.door-flag { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.4); color: #FDE68A; font-size: 14px; line-height: 1.45; }
 .door-flag .door-reasons { margin-top: 4px; font-size: 13px; color: var(--muted); }

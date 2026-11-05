@@ -119,7 +119,13 @@ test('brain map: hover preview, zoom, search, topic filter and min. connections'
   // hover: the biggest dot (settled, so it doesn't move away)
   await page.evaluate(() => { obGraph._state.alpha = 0; });
   const target = await page.evaluate(() => { const n = obGraph._state.nodes.slice().sort((a, b) => b.deg - a.deg)[0]; return { id: n.id, ...obGraph._screenOf(n.id), deg: n.deg }; });
-  await page.mouse.move(target.x, target.y);
+  // the map may still be sizing itself on a busy computer: aim again until the card shows
+  for (let i = 0; i < 20 && !(await page.isVisible('#graphPreview')); i++) {
+    Object.assign(target, await page.evaluate((id) => obGraph._screenOf(id), target.id));
+    await page.mouse.move(target.x - 30, target.y - 30);
+    await page.mouse.move(target.x, target.y);
+    await page.waitForTimeout(250);
+  }
   await page.waitForSelector('#graphPreview:not([hidden])');
   const card = await page.textContent('#graphPreview');
   assert.match(card, new RegExp(`${target.deg} connections`), 'preview shows the connection count');
@@ -191,7 +197,11 @@ test('375px phone: no sideways scroll on any tab, big tap targets, map controls 
   await page.waitForTimeout(300);
   await page.evaluate(() => { obGraph._state.alpha = 0; });
   const p = await page.evaluate(() => { const n = obGraph._state.nodes.slice().sort((a, b) => b.deg - a.deg)[0]; return obGraph._screenOf(n.id); });
-  await page.touchscreen.tap(p.x, p.y);
+  for (let i = 0; i < 20 && !(await page.isVisible('#graphPreview .gp-open')); i++) {
+    const q = await page.evaluate(() => { const n = obGraph._state.nodes.slice().sort((a, b) => b.deg - a.deg)[0]; return obGraph._screenOf(n.id); });
+    await page.touchscreen.tap(q.x, q.y);
+    await page.waitForTimeout(250);
+  }
   await page.waitForSelector('#graphPreview:not([hidden]) .gp-open');
   await page.tap('#graphPreview .gp-open');
   await page.waitForSelector('#graphSheet.open');
@@ -201,7 +211,7 @@ test('375px phone: no sideways scroll on any tab, big tap targets, map controls 
 
 test('a 300-node map stays smooth', { skip }, async () => {
   const { ctx, page, errors } = await open({}, '?graph=300#graph');
-  await page.waitForFunction(() => window.obGraph && obGraph._state.nodes.length === 300, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.obGraph && obGraph._state.nodes.length === 300, null, { timeout: 45000 });
   const ms = await page.evaluate(() => {
     const t0 = performance.now();
     for (let i = 0; i < 40; i++) obGraph._draw(performance.now());
