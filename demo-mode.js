@@ -532,7 +532,9 @@
     async getUser() { return { data: { user: session ? session.user : null }, error: null }; },
     onAuthStateChange(cb) {
       listeners.add(cb);
-      setTimeout(() => { try { cb(session ? 'SIGNED_IN' : 'SIGNED_OUT', session); } catch (e) { console.error(e); } }, 0);
+      // Answer only once every script on the page has loaded, or the app can start before shell.js is ready.
+      const fire = () => setTimeout(() => { try { cb(session ? 'SIGNED_IN' : 'SIGNED_OUT', session); } catch (e) { console.error(e); } }, 0);
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fire, { once: true }); else fire();
       return { data: { subscription: { unsubscribe() { listeners.delete(cb); } } } };
     },
     async signInWithPassword() { await tick(); session = { access_token: 'demo-token', token_type: 'bearer', user: USER }; emit('SIGNED_IN'); return { data: { session, user: USER }, error: null }; },
