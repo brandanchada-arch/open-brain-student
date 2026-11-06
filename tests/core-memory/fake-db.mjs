@@ -29,6 +29,10 @@ export function fakeDb(tables = {}, rpcHandlers = {}) {
         return finish(added);
       }
       let out = rowsOf().filter(matches);
+      if (state.op === 'update') {
+        out.forEach((r) => Object.assign(r, state.patch));
+        return finish(out);
+      }
       if (state.order) {
         const { col, asc } = state.order;
         out = [...out].sort((a, b) => (a[col] < b[col] ? -1 : a[col] > b[col] ? 1 : 0) * (asc ? 1 : -1));
@@ -44,6 +48,8 @@ export function fakeDb(tables = {}, rpcHandlers = {}) {
     const q = {
       select() { return q; },
       insert(rows) { state.op = 'insert'; state.rows = Array.isArray(rows) ? rows : [rows]; return q; },
+      update(patch) { state.op = 'update'; state.patch = patch; return q; },
+      lt(c, v) { (state.filterNames ??= []).push(`lt:${c}`); state.filters.push(r => Date.parse(r[c]) < Date.parse(v)); return q; },
       upsert(rows, opts = {}) { state.op = 'upsert'; state.rows = Array.isArray(rows) ? rows : [rows]; state.opts = opts; return q; },
       eq(c, v) { (state.filterNames ??= []).push(`eq:${c}`); state.filters.push(r => r[c] === v); return q; },
       neq(c, v) { (state.filterNames ??= []).push(`neq:${c}`); state.filters.push(r => r[c] !== v); return q; },

@@ -15,8 +15,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const MIN_THOUGHTS = 5;          // fewer than this = no digest this week
-const PER_THOUGHT_CHARS = 700;   // long captures (PDFs, videos) get trimmed
-const TOTAL_CHARS = 40_000;      // keeps each digest cheap
+const PER_THOUGHT_CHARS = 1500;  // long captures get trimmed, but most notes fit whole
+const TOTAL_CHARS = 60_000;      // keeps each digest cheap
 
 const SYSTEM_PROMPT = `You write a short weekly digest of someone's personal notes, speaking to them as "you".
 Use plain, warm, direct language. No hype. Use only what is in the notes and do not invent facts.
@@ -146,7 +146,8 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         systemPrompt: SYSTEM_PROMPT,
         prompt: `Here are my notes from the past 7 days, grouped by category:\n${notes}`,
-        maxTokens: 1500,
+        maxTokens: 4000, // includes this model's thinking, so 1,500 could cut a digest short
+        model: "claude-sonnet-5-5",
         userId: userId ?? undefined,
         source: "weekly-digest",
       }),

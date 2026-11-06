@@ -427,7 +427,7 @@
     <div class="screen-head"><h1>Study</h1></div>
     <div class="chips" role="tablist">
       <button class="chip active" data-sub="gaps" type="button">Gaps</button>
-      <button class="chip" data-sub="quiz" type="button">Quiz</button>
+      <button class="chip" data-sub="quiz" type="button" style="display:none;">Quiz</button>
       <button class="chip" data-sub="library" type="button">Library</button>
     </div>
     <div class="sub active" id="panel-gaps">
@@ -452,7 +452,7 @@
         <input type="search" id="libSearchInput" placeholder="Search your library..." enterkeyhint="search" aria-label="Search your library">
         <button type="submit">Search</button>
       </form>
-      <button id="libQuizBtn" class="secondary" type="button" style="width:100%; margin-top:10px;">Quiz me</button>
+      <button id="libQuizBtn" class="secondary" type="button" style="display:none; width:100%; margin-top:10px;">Quiz me</button>
       <div id="libMeta" class="gq-meta" style="margin-top:12px;"></div>
       <div id="libMsg"></div>
       <div id="libReader" class="lib-reader" hidden></div>

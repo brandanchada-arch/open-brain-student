@@ -146,7 +146,14 @@ const ADAPTERS: Record<string, Adapter> = {
 
 // ── Cost receipt ──
 
+// Dollars per million tokens for models a function asks for by name, so spending stays visible.
+const KNOWN_PRICES: Record<string, { input: number; output: number }> = {
+  "claude-sonnet-5-5": { input: 2, output: 10 },
+};
+
 function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
+  const known = KNOWN_PRICES[model];
+  if (known) return (inputTokens * known.input + outputTokens * known.output) / 1_000_000;
   // Prices in secrets describe LLM_MODEL only. Any other model logs cost 0.
   if (model !== Deno.env.get("LLM_MODEL")) return 0;
   const priceIn = Number(Deno.env.get("LLM_PRICE_INPUT_PER_MTOK"));
