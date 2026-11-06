@@ -21,6 +21,7 @@ const MIN_USER_PROMPTS = 3;
 const MIN_TEXT_CHARS = 1500;
 const MIN_CLAUDE_REPLIES = 4;      // a one-prompt session with this many replies did real work
 const MIN_SOLO_CHARS = 5000;       // or this much text
+const MIN_PRESSED_CHARS = 200;     // the button saves anything longer than this
 const MAX_MSG_CHARS = 1500;        // per Claude message sent to the summarizer
 const MAX_USER_MSG_CHARS = 15000;  // per message the owner wrote
 const MAX_TRANSCRIPT_CHARS = 60000; // total sent to the summarizer
@@ -145,8 +146,23 @@ function runClaude(prompt, args) {
   });
 }
 
-async function summarize(condensed) {
-  const prompt = PROMPT_HEAD + condensed.replace(/<\/transcript>/gi, "") + "\n</transcript>\n";
+// Coming back to a session sends only the old summary and the new messages, so it costs little.
+function updatePromptHead(previous) {
+  return `${PROMPT_HEAD.split("<transcript>")[0]}
+This session already has a summary, and the person came back to it. Between <previous> tags is that summary. Between <transcript> tags is only what's new. Write one updated summary that covers the whole session, in the same format. Keep what is still true, and change what the new messages changed. Under "About Brandan", list only things that are new in these messages.
+
+<previous>
+TITLE: ${previous.title}
+${redact(previous.summary)}
+</previous>
+
+<transcript>
+`;
+}
+
+async function summarize(condensed, previous) {
+  const head = previous ? updatePromptHead(previous) : PROMPT_HEAD;
+  const prompt = head + condensed.replace(/<\/transcript>/gi, "") + "\n</transcript>\n";
   // Sonnet, not Haiku: in a side-by-side test Haiku misread what the owner wanted, and these
   // notes save without review.
   const strict = ["-p", "--model", "sonnet", "--output-format", "text", "--tools", "", "--no-session-persistence", "--strict-mcp-config"];
@@ -213,41 +229,105 @@ function isTooShort(msgs) {
   return prompts < MIN_USER_PROMPTS && replies < MIN_CLAUDE_REPLIES && chars < MIN_SOLO_CHARS;
 }
 
-async function main(argv = process.argv.slice(2)) {
-  const [transcript, sessionId = "", cwd = "", reason = ""] = argv;
+// ---------- one summary per session ----------
+// The ledger remembers how many messages each session's summary already covers, so the same
+// work is never summarized twice, whichever of the button, the sweep or the hook gets there.
+const ledgerPath = (cfg) => path.join(cfg.sessionLogDir, ".session-ledger.json");
+
+function readLedger(cfg) {
+  try { return JSON.parse(fs.readFileSync(ledgerPath(cfg), "utf8")); } catch { return {}; }
+}
+
+function saveEntry(cfg, key, entry) {
+  fs.mkdirSync(cfg.sessionLogDir, { recursive: true });
+  const ledger = readLedger(cfg);
+  ledger[key] = entry;
+  const tmp = `${ledgerPath(cfg)}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(ledger, null, 1));
+  fs.renameSync(tmp, ledgerPath(cfg));
+}
+
+// Stops the button and the sweep working on one session at the same moment.
+function takeLock(cfg, key) {
+  fs.mkdirSync(cfg.sessionLogDir, { recursive: true });
+  const lock = path.join(cfg.sessionLogDir, `.lock-${slug(key, 40)}`);
+  try {
+    if (Date.now() - fs.statSync(lock).mtimeMs > 10 * 60 * 1000) fs.unlinkSync(lock);
+  } catch { /* no lock yet */ }
+  try {
+    fs.closeSync(fs.openSync(lock, "wx"));
+    return () => { try { fs.unlinkSync(lock); } catch { /* already gone */ } };
+  } catch { return null; }
+}
+
+async function upload(cfg, payload) {
+  if (!cfg.sessionLogUpload || !cfg.ready) return true;
+  const { addSessionLog } = require("./lib/brain-api");
+  try {
+    await addSessionLog(payload, { timeoutMs: 15000, cfg });
+    return true;
+  } catch (err) {
+    noteError(cfg.sessionLogDir, new Error(`upload failed: ${err.message}`));
+    return false;
+  }
+}
+
+// Returns "off", "short", "unchanged", "busy", or the summary file's path.
+async function summarizeSession({ transcript, sessionId = "", cwd = "", reason = "", pressed = false }) {
   const cfg = getConfig();
   if (!cfg.sessionLogs || !transcript) return "off";
-
-  const msgs = readTranscript(transcript);
-  if (isTooShort(msgs)) return "short";
-
-  const { title, summary, aboutMe } = parseSummary(await summarize(condense(msgs)));
-  const project = cfg.sessionLogProject || path.basename(cwd || "") || "session";
-
-  fs.mkdirSync(cfg.sessionLogDir, { recursive: true });
-  const file = path.join(cfg.sessionLogDir, logFileName(cfg.sessionLogDir, project, sessionId));
-  const body = [
-    `# ${title}`,
-    "",
-    `- Date: ${new Date().toLocaleString()}`,
-    `- Project folder: ${path.basename(cwd || "") || "(unknown)"}`,
-    `- Session: ${slug(sessionId, 8) || "(unknown)"}${reason ? ` (ended: ${reason})` : ""}`,
-    `- Uploaded to Open Brain: ${cfg.sessionLogUpload ? "yes" : "no (SESSION_LOG_UPLOAD is off)"}`,
-    "",
-    summary,
-    "",
-  ].join("\n");
-  fs.writeFileSync(file, body, "utf8");
-
-  if (cfg.sessionLogUpload && cfg.ready) {
-    const { addSessionLog } = require("./lib/brain-api");
-    try {
-      await addSessionLog({ title, summary, project, aboutMe }, { timeoutMs: 15000, cfg });
-    } catch (err) {
-      noteError(cfg.sessionLogDir, new Error(`upload failed: ${err.message}`));
+  const key = sessionId || path.basename(transcript, ".jsonl");
+  const release = takeLock(cfg, key);
+  if (!release) return "busy";
+  try {
+    const stat = fs.statSync(transcript);
+    const msgs = readTranscript(transcript);
+    const previous = readLedger(cfg)[key];
+    const done = previous && previous.summary ? previous.messages : 0;
+    if (done && msgs.length <= done) return "unchanged";
+    // Pressing the button means he wants it saved, so only a nearly empty chat is refused.
+    const chars = msgs.reduce((n, m) => n + m.text.length, 0);
+    if (!done && (pressed ? chars < MIN_PRESSED_CHARS : isTooShort(msgs))) {
+      saveEntry(cfg, key, { short: true, size: stat.size });
+      return "short";
     }
+
+    const fresh = done ? msgs.slice(done) : msgs;
+    const { title, summary, aboutMe } = parseSummary(await summarize(condense(fresh), done ? previous : null));
+    const project = cfg.sessionLogProject || path.basename(cwd || "") || "session";
+    const file = done && previous.file && fs.existsSync(previous.file)
+      ? previous.file
+      : (fs.mkdirSync(cfg.sessionLogDir, { recursive: true }), path.join(cfg.sessionLogDir, logFileName(cfg.sessionLogDir, project, sessionId)));
+    const body = [
+      `# ${title}`,
+      "",
+      `- Date: ${new Date().toLocaleString()}`,
+      `- Project folder: ${path.basename(cwd || "") || "(unknown)"}`,
+      `- Session: ${slug(sessionId, 8) || "(unknown)"}${reason ? ` (saved by: ${reason})` : ""}`,
+      `- Uploaded to Open Brain: ${cfg.sessionLogUpload ? "yes" : "no (SESSION_LOG_UPLOAD is off)"}`,
+      "",
+      summary,
+      "",
+    ].join("\n");
+    fs.writeFileSync(file, body, "utf8");
+
+    const sessionAt = new Date(stat.mtimeMs).toISOString();
+    const payload = { title, summary, project, aboutMe, sessionKey: sessionId || undefined, sessionAt };
+    const uploaded = await upload(cfg, payload);
+    // A failed upload stays marked, so the sweep can retry it without another AI call.
+    saveEntry(cfg, key, {
+      messages: msgs.length, size: stat.size, title, summary, file, project, sessionAt,
+      ...(uploaded ? {} : { pendingUpload: payload }),
+    });
+    return file;
+  } finally {
+    release();
   }
-  return file;
+}
+
+async function main(argv = process.argv.slice(2)) {
+  const [transcript, sessionId = "", cwd = "", reason = ""] = argv;
+  return summarizeSession({ transcript, sessionId, cwd, reason });
 }
 
 if (require.main === module) {
@@ -257,4 +337,6 @@ if (require.main === module) {
   );
 }
 
-module.exports = { main, redact, readTranscript, condense, parseSummary, parseAboutMe, isTooShort, PROMPT_HEAD, runClaude };
+module.exports = {
+  main, summarizeSession, readLedger, saveEntry, upload, redact, readTranscript, condense, parseSummary, parseAboutMe, isTooShort, PROMPT_HEAD, runClaude,
+};

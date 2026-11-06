@@ -125,9 +125,30 @@ export function cleanSessionLog(args: any) {
   return { title, summary, project };
 }
 
+// When the work happened. An old session keeps its old date, so catching up on past
+// sessions doesn't look like this week's news to the Sunday job.
+function cleanSessionAt(value: unknown): string | null {
+  const ms = Date.parse(String(value ?? ""));
+  return Number.isFinite(ms) && ms <= Date.now() + 60_000 ? new Date(ms).toISOString() : null;
+}
+
 export async function addSessionLog(db: Db, userId: string, args: any) {
-  const row = { user_id: userId, ...cleanSessionLog(args) };
-  const { data, error } = await db.from("session_logs").insert(row).select("id, created_at").single();
+  const row: any = { user_id: userId, ...cleanSessionLog(args) };
+  const key = typeof args?.session_key === "string" ? args.session_key.trim().slice(0, 100) : "";
+  const at = cleanSessionAt(args?.session_at);
+  if (key) row.session_key = key;
+  if (at) row.created_at = at;
+
+  // Saving the same session again updates its one summary.
+  let existing: any = null;
+  if (key) {
+    const found = await db.from("session_logs").select("id").eq("user_id", userId).eq("session_key", key).maybeSingle();
+    if (found.error) throw new Error(`Could not read the session log: ${found.error.message}`);
+    existing = found.data;
+  }
+  const { data, error } = existing
+    ? await db.from("session_logs").update(row).eq("id", existing.id).eq("user_id", userId).select("id, created_at").single()
+    : await db.from("session_logs").insert(row).select("id, created_at").single();
   if (error) throw new Error(`Could not save the session log: ${error.message}`);
 
   // The log is already safe, so a problem with the notes doesn't fail the call.
@@ -135,7 +156,7 @@ export async function addSessionLog(db: Db, userId: string, args: any) {
   let aboutSaved = 0;
   if (notes.length) {
     const { error: noteErr } = await db.from("about_me_notes").insert(
-      notes.map((note) => ({ user_id: userId, note, project: row.project, session_log_id: data.id })),
+      notes.map((note) => ({ user_id: userId, note, project: row.project, session_log_id: data.id, ...(at ? { created_at: at } : {}) })),
     );
     if (noteErr) console.error("Could not save about-me notes:", noteErr.message);
     else aboutSaved = notes.length;

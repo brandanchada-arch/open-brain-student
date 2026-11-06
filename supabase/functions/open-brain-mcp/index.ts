@@ -80,6 +80,8 @@ const TOOLS = [
           items: { type: "string" },
           description: "Optional: up to 3 short lasting things the user's own words showed about them",
         },
+        session_key: { type: "string", description: "Optional: the session's id, so saving again updates its one summary" },
+        session_at: { type: "string", description: "Optional: when the work happened, as an ISO date" },
       },
       required: ["title", "summary"],
     },

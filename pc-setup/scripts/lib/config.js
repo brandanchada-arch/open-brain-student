@@ -62,6 +62,10 @@ function getConfig() {
     sessionLogUpload: isOn(env.SESSION_LOG_UPLOAD, false), // OFF unless explicitly turned on
     sessionLogProject: env.SESSION_LOG_PROJECT || "",
     sessionLogDir: path.join(os.homedir(), "claude-session-logs"),
+    sessionLogOnEnd: isOn(env.SESSION_LOG_ON_END, false), // the button and the sweep replaced this
+    sessionSweep: isOn(env.SESSION_SWEEP, true),
+    sessionSweepQuietHours: Number(env.SESSION_SWEEP_QUIET_HOURS) > 0 ? Number(env.SESSION_SWEEP_QUIET_HOURS) : 24,
+    sessionSweepPerRun: Number(env.SESSION_SWEEP_PER_RUN) > 0 ? Number(env.SESSION_SWEEP_PER_RUN) : 1,
     fridaySuggestion: isOn(env.FRIDAY_SUGGESTION, true),
   };
 }
