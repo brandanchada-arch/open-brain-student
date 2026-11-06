@@ -38,7 +38,9 @@ async function main() {
 
   const { getConfig } = require("./lib/config");
   const cfg = getConfig();
-  if (!cfg.sessionLogs) return;
+  // Off by default: "session ended" proved unreliable, so the Save summary button and
+  // session-sweep.js do this job now. SESSION_LOG_ON_END=on brings this hook back.
+  if (!cfg.sessionLogs || !cfg.sessionLogOnEnd) return;
 
   let input = {};
   try { input = JSON.parse(await readStdin(1500)); } catch { return; }

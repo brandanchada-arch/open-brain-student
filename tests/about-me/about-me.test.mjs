@@ -12,6 +12,7 @@ import {
   recentSessions, staleFocusLines,
 } from '../../supabase/functions/_shared/core-memory.ts';
 import { GAP_SYSTEM_PROMPT, pickGapNotes } from '../../supabase/functions/_shared/gap-prompt.ts';
+import { fakeDb as coreFakeDb } from '../core-memory/fake-db.mjs';
 
 const require = createRequire(import.meta.url);
 const w = require('../../pc-setup/scripts/session-log-worker.js');
@@ -167,6 +168,21 @@ test('addSessionLog saves notes tied to the log, and a note failure keeps the lo
     assert.equal(r2.saved, true);
     assert.equal(r2.about_saved, 0);
   } finally { console.error = realError; }
+});
+
+test('saving the same session again updates its one summary and keeps its date', async () => {
+  const db = coreFakeDb({ session_logs: [], about_me_notes: [] });
+  const at = '2026-10-01T12:00:00.000Z';
+  const first = await addSessionLog(db, ME, { title: 'a', summary: 's1', session_key: 'sess-1', session_at: at, about_me: ['Note one'] });
+  const second = await addSessionLog(db, ME, { title: 'b', summary: 's2', session_key: 'sess-1', about_me: ['Note two'] });
+  assert.equal(db.data.session_logs.length, 1);
+  assert.equal(first.id, second.id);
+  assert.equal(db.data.session_logs[0].summary, 's2');
+  assert.equal(db.data.about_me_notes.length, 2);
+  assert.equal(db.data.about_me_notes[0].created_at, at);
+  await addSessionLog(db, ME, { title: 'c', summary: 's3', session_key: 'sess-2', session_at: 'not a date' });
+  assert.equal(db.data.session_logs.length, 2);
+  assert.notEqual(db.data.session_logs[1].created_at, 'not a date');
 });
 
 test('cleanAboutNotes keeps at most 3 and leaves out oversized notes', () => {

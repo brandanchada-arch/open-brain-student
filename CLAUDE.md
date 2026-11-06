@@ -77,14 +77,15 @@ Anything importing `_shared/` must be redeployed when the file it imports change
 
 ## Running on a schedule and on the PC
 - **Sunday condenser**: pg_cron job `weekly-brain-condenser`, `0 16 * * 0`, an hour after the digest. Uses Vault secret `service_role_key`, like the digest. Writes proposals only.
-- **PC setup** (`pc-setup/README.md`; installed copies live in `%USERPROFILE%\.open-brain`, re-copy the scripts after changing them): skills in `%USERPROFILE%\.claude\skills`; settings and the MCP key in `.open-brain\.env`; backups in `%USERPROFILE%\open-brain-export`; Windows task `Open Brain weekly export`; SessionStart and SessionEnd hooks in `%USERPROFILE%\.claude\settings.json`; session logs in `%USERPROFILE%\claude-session-logs`, with `SESSION_LOG_UPLOAD=off`.
+- **PC setup** (`pc-setup/README.md`; installed copies live in `%USERPROFILE%\.open-brain`, re-copy the scripts after changing them): skills in `%USERPROFILE%\.claude\skills`; settings and the MCP key in `.open-brain\.env`; backups in `%USERPROFILE%\open-brain-export`; Windows task `Open Brain weekly export`; SessionStart and SessionEnd hooks in `%USERPROFILE%\.claude\settings.json`; session logs in `%USERPROFILE%\claude-session-logs`, with `SESSION_LOG_UPLOAD=on`.
+- **Session summaries** (2026-11-06): one per session, tracked by `.session-ledger.json` in the logs folder and `session_logs.session_key` (`supabase/sql/2026-11-06-session-key.sql`). Saved by the `brain-buttons` mod's Save summary button or `/done` (`pc-setup/mods`, installed copy in `.open-brain\mods`), or by `session-sweep.js`, an hourly task (`pc-setup/install-session-sweep.ps1`) that handles sessions quiet for 24 hours, one per run, newest first. Coming back sends only new messages. The SessionEnd hook is off unless `SESSION_LOG_ON_END=on`. `SESSION_SWEEP=off` stops the sweep.
 - **Master is protected on GitHub**: changes go through a pull request. `gh` isn't installed, so push a branch and merge it on github.com.
 
 ## Not checked yet
 - **Overnight build (branch `overnight/finish-brain`)**: health check, news filter, topic page drafts, Friday suggestions and small fixes are tested with fakes only and are not live. Steps are in `NEEDS-BRANDAN.md`. **Real YouTube feeds are unproven.** The `enrich-thought` lock needs one real test note right after it's deployed. A topic page's first draft waits in Review if older notes were available to it, even if it doesn't cite them. Once a page has text, its updates apply automatically.
 - **Telegram `/recent` and `/ask` on a real phone**: both pass with the real bot code and fakes (`tests/ask-edit-check/telegram-commands.test.mjs`), but nobody has tried them through real Telegram.
 - **Sunday digest**: the fixed `weekly-digest` passed the token check on a real job run, but that run stopped at "fewer than 5 thoughts", so the first full digest on the new code is the Sunday after go-live.
-- **Session log hook**: its tests now pass on Windows with a fake `claude`, but it still needs one real Claude Code session of 3+ messages ended with `/exit`, then exactly one new file in `claude-session-logs`.
+- **Session summaries**: one real press of `session-save.js` worked (saved once, second press made no AI call). The hourly sweep and installed buttons still need a first real run.
 - **`save_to_library` on a real page**: tested with fakes only. Needs Claude Desktop restarted or the connector reconnected to see it.
 - **`voice` skill**: needs 3-5 writing samples in `%USERPROFILE%\.claude\skills\voice\samples.md`. Never in the repo copy.
 

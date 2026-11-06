@@ -48,11 +48,13 @@ async function callTool(name, args = {}, { timeoutMs = 10000, cfg = getConfig() 
 }
 
 const getCore = (opts) => callTool("get_core", {}, opts);
-const addSessionLog = ({ title, summary, project, aboutMe }, opts) =>
+const addSessionLog = ({ title, summary, project, aboutMe, sessionKey, sessionAt }, opts) =>
   callTool("add_session_log", {
     title, summary,
     ...(project ? { project } : {}),
     ...(aboutMe && aboutMe.length ? { about_me: aboutMe } : {}),
+    ...(sessionKey ? { session_key: sessionKey } : {}),
+    ...(sessionAt ? { session_at: sessionAt } : {}),
   }, opts);
 
 // body: { table, include_archived, after, limit }

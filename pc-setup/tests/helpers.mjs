@@ -10,7 +10,8 @@ export const SCRIPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), "
 export function tempHome(envLines) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "ob-home-"));
   fs.mkdirSync(path.join(home, ".open-brain"));
-  fs.writeFileSync(path.join(home, ".open-brain", ".env"), envLines.join("\n"));
+  // Older tests drive the end-of-session hook, which is now off unless this says otherwise.
+  fs.writeFileSync(path.join(home, ".open-brain", ".env"), ["SESSION_LOG_ON_END=on", ...envLines].join("\n"));
   return home;
 }
 
