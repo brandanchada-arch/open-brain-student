@@ -257,4 +257,4 @@ if (require.main === module) {
   );
 }
 
-module.exports = { main, redact, readTranscript, condense, parseSummary, parseAboutMe, isTooShort, PROMPT_HEAD };
+module.exports = { main, redact, readTranscript, condense, parseSummary, parseAboutMe, isTooShort, PROMPT_HEAD, runClaude };

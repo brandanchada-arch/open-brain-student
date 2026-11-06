@@ -61,4 +61,10 @@ async function callExport(body, { timeoutMs = 120000, cfg = getConfig() } = {}) 
   return postJson(`${cfg.functionsUrl}/export-brain`, cfg.accessKey, body, timeoutMs);
 }
 
-module.exports = { callTool, getCore, addSessionLog, callExport };
+// body: { week, title, suggestion, sources }
+async function saveSuggestion(body, { timeoutMs = 60000, cfg = getConfig() } = {}) {
+  requireConfig(cfg);
+  return postJson(`${cfg.functionsUrl}/save-suggestion`, cfg.accessKey, body, timeoutMs);
+}
+
+module.exports = { callTool, getCore, addSessionLog, callExport, saveSuggestion };

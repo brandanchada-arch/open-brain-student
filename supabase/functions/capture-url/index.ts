@@ -10,7 +10,7 @@
 // the link to this function, and this function does the fetching.
 // ============================================================================
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { indexLibraryEntry, saveLibraryEntry } from "../_shared/library.ts";
 import { doorCheckViaGateway } from "../_shared/door-check.ts";
 

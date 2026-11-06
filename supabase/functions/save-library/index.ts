@@ -11,7 +11,7 @@
 // WHO IS SAVING comes from the caller's own login token, never from the body.
 // ============================================================================
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { firstLine, inBackground, indexLibraryEntry, saveLibraryEntry } from "../_shared/library.ts";
 import { doorCheckViaGateway } from "../_shared/door-check.ts";
 

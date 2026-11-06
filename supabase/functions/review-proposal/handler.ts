@@ -89,8 +89,21 @@ export async function handleReview(req: Request, deps: ReviewDeps): Promise<Resp
     return json({ ok: false, error: "Send JSON like {\"action\": \"approve\", \"id\": \"…\"}" }, 400);
   }
   const action = body.action;
+
+  // The health card on this screen. Read-only: counts and dates for this user, never note text.
+  if (action === "health") {
+    try {
+      const { data, error } = await deps.admin.rpc("brain_health", { p_user: user.id });
+      if (error) return json({ ok: false, error: "Could not read brain health." }, 500);
+      return json({ ok: true, action, health: data });
+    } catch (err) {
+      console.error("review-proposal health failed:", err);
+      return json({ ok: false, error: "Could not read brain health." }, 500);
+    }
+  }
+
   if (action !== "approve" && action !== "reject" && action !== "undo") {
-    return json({ ok: false, error: "action must be approve, reject or undo" }, 400);
+    return json({ ok: false, error: "action must be approve, reject, undo or health" }, 400);
   }
 
   // 3. Do it with the database function (each one is a single transaction).

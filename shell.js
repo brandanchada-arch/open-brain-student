@@ -197,6 +197,7 @@
   function splitHash(hash) {
     const [base, id] = String(hash || '').replace('#', '').split('/');
     if (base === 'jobs' && id) window.obJobOpen = id;
+    if (base === 'library' && id) window.obLibraryOpen = id;
     return base;
   }
   function routeFromHash() {
@@ -210,7 +211,7 @@
   }));
   document.querySelectorAll('.chip[data-sub]').forEach(c => c.addEventListener('click', () => go(c.dataset.sub)));
   window.addEventListener('hashchange', () => {
-    const job = /^#jobs\/./.test(location.hash);
+    const job = /^#(jobs|library)\/./.test(location.hash);
     const h = splitHash(location.hash);
     if (SCREEN_OF[h] && (job || (SUB_ALIAS[h] || h) !== (current.sub || current.screen))) go(h, { top: true });
   });

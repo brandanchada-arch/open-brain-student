@@ -1,6 +1,5 @@
 // Run: node --experimental-strip-types --test pc-setup/tests/session-log.test.mjs
-// Uses a fake `claude` (tests/fake-bin) and a fake server. POSIX only (the fake claude is a
-// shebang script); the Windows spawn path is untested.
+// Uses a fake `claude` (tests/fake-bin) and a fake server, on Windows and on Linux/Mac.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -45,8 +44,9 @@ async function endSession(home, transcript, extraEnv = {}) {
   return { r, log };
 }
 
-// The fake `claude` in fake-bin/ is a shell script, which Windows cannot run as a program.
-const FAKE_CLAUDE_SKIP = process.platform === "win32" && "needs the fake claude shell script (Linux or Mac only)";
+// The fake `claude` is a Node script. On Windows, fake-bin/claude.cmd starts it, the same way
+// cmd.exe finds the real claude.cmd, so these tests run through the real Windows spawn path too.
+const FAKE_CLAUDE_SKIP = false;
 
 test("writes a redacted, short log in the background; claude runs once (loop guard works); no upload by default", { skip: FAKE_CLAUDE_SKIP }, async () => {
   const srv = await startFakeServer();
@@ -62,7 +62,7 @@ test("writes a redacted, short log in the background; claude runs once (loop gua
     const c = calls(log);
     assert.equal(c.length, 1, `claude should run exactly once, ran ${c.length} times`);
     assert.equal(c[0].guard, "1");
-    assert.deepEqual(c[0].args, ["-p", "--output-format", "text", "--tools", "", "--no-session-persistence", "--strict-mcp-config"]);
+    assert.deepEqual(c[0].args, ["-p", "--model", "sonnet", "--output-format", "text", "--tools", "", "--no-session-persistence", "--strict-mcp-config"]);
     assert.equal(logsIn(home).length, 1);
 
     const text = fs.readFileSync(path.join(home, "claude-session-logs", files[0]), "utf8");
@@ -133,7 +133,7 @@ test("never falls back to an unrestricted `claude -p` when the strict flags are 
   const { log } = await endSession(home, writeTranscript(home, 4), { FAKE_FAIL_STRICT: "1" });
   const errLog = path.join(home, "claude-session-logs", ".worker-errors.log");
   assert.ok(await waitFor(() => fs.existsSync(errLog)), "the failure is written to .worker-errors.log");
-  assert.deepEqual(calls(log).map((c) => c.args), [["-p", "--output-format", "text", "--tools", "", "--no-session-persistence", "--strict-mcp-config"]]);
+  assert.deepEqual(calls(log).map((c) => c.args), [["-p", "--model", "sonnet", "--output-format", "text", "--tools", "", "--no-session-persistence", "--strict-mcp-config"]]);
   assert.equal(logsIn(home).length, 0, "no summary written");
 });
 

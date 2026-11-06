@@ -12,7 +12,7 @@
 // deno-lint-ignore-file no-explicit-any
 import {
   buildCondenserPrompt, cleanProposals, CONDENSER_LIMITS, CONDENSER_SYSTEM_PROMPT, formatItems,
-  changedLines, PAGE_SLUGS, PAGE_TITLES, parseLlmJson, PENDING_EXPIRY_DAYS, shouldAutoApply, type SourceItem,
+  changedLines, isDoorFlagged, PAGE_SLUGS, PAGE_TITLES, parseLlmJson, PENDING_EXPIRY_DAYS, shouldAutoApply, type SourceItem,
   staleFocusLines, toSourceItems,
 } from "../_shared/core-memory.ts";
 
@@ -85,6 +85,8 @@ export async function runCondenser(deps: CondenserDeps) {
     .select("id, title, doc_type, course, topic, summary, content, metadata, created_at")
     .eq("user_id", ownerId)
     .neq("doc_type", "digest") // digests are AI summaries of the same thoughts
+    .neq("doc_type", "news-list") // video lists from outside feeds, not what you've been doing
+    .neq("doc_type", "suggestion") // the AI's own Friday suggestions, not facts about you
     .gte("created_at", since)
     .order("created_at", { ascending: true })
     .limit(40);
@@ -102,10 +104,17 @@ export async function runCondenser(deps: CondenserDeps) {
   const items = toSourceItems(thoughts ?? [], library ?? [], logs ?? []);
   const flaggedSkipped = (library ?? []).length - items.filter((i) => i.kind === "library").length;
 
-  // 4. First run: empty core page and nothing waiting for it -> also read short
-  //    summaries of all active thoughts so there's enough to draft one.
+  // 4. A page's first draft: it's empty and nothing is waiting for it -> also read short summaries
+  //    of older notes and library entries. Topic pages get this once: a draft that was rejected,
+  //    undone or left to expire isn't tried again. Core keeps trying until it has text.
+  const { data: proposalRows, error: propErr } = await db
+    .from("brain_proposals").select("target_slug").eq("user_id", ownerId);
+  if (propErr) fail("Could not read past proposals", propErr);
+  const proposedBefore = new Set((proposalRows ?? []).map((r: any) => r.target_slug));
+  const bootstrapSlugs = PAGE_SLUGS.filter((s) =>
+    !String(pages[s] ?? "").trim() && !skipSlugs.includes(s) && (s === "core" || !proposedBefore.has(s))) as string[];
   let bootstrapNotes = "";
-  if (!String(pages.core ?? "").trim() && !skipSlugs.includes("core")) {
+  if (bootstrapSlugs.length) {
     const { data: all, error: aErr } = await db
       .from("thoughts")
       .select("id, summary, category, created_at")
@@ -126,7 +135,34 @@ export async function runCondenser(deps: CondenserDeps) {
           text: s, label: `${String(t.created_at).slice(0, 10)}: ${s.slice(0, 80)}`, category: t.category ?? null,
         };
       });
-    bootstrapNotes = formatItems(extra, CONDENSER_LIMITS.bootstrapTotal);
+    // Library: titles and labels only, never the full text (some entries are huge).
+    // Flagged entries, digests and news lists stay out.
+    const { data: shelf, error: shelfErr } = await db
+      .from("library")
+      .select("id, title, doc_type, course, topic, summary, metadata, created_at")
+      .eq("user_id", ownerId)
+      .neq("doc_type", "digest")
+      .neq("doc_type", "news-list")
+      .neq("doc_type", "suggestion")
+      .order("created_at", { ascending: false })
+      .limit(300);
+    if (shelfErr) fail("Could not read library summaries", shelfErr);
+    const weekLibrary = new Set(items.filter((i) => i.kind === "library").map((i) => i.id));
+    (shelf ?? [])
+      .filter((l: any) => !isDoorFlagged(l) && !weekLibrary.has(l.id))
+      .forEach((l: any, i: number) => {
+        const labels = [l.doc_type, l.course, l.topic].filter(Boolean).join(", ");
+        const date = String(l.created_at).slice(0, 10);
+        const summary = String(l.summary ?? "").replace(/\s+/g, " ").trim();
+        const title = String(l.title ?? "Untitled").replace(/\s+/g, " ").trim();
+        const text = `${title} (${labels})${summary ? `: ${summary}` : ""}`.slice(0, CONDENSER_LIMITS.bootstrapPerItem);
+        extra.push({ ref: `BL${i + 1}`, kind: "library", id: l.id, date, text, label: `Library: ${title.slice(0, 80)}` });
+      });
+    // The library gets up to half the room, so many older thoughts can't crowd it out.
+    // Thoughts get whatever it leaves.
+    const shelfNotes = formatItems(extra.filter((e) => e.kind === "library"), CONDENSER_LIMITS.bootstrapTotal / 2);
+    bootstrapNotes = shelfNotes +
+      formatItems(extra.filter((e) => e.kind !== "library"), CONDENSER_LIMITS.bootstrapTotal - shelfNotes.length);
     // Only the summaries that fit in the prompt can be cited as sources.
     items.push(...extra.filter((e) => bootstrapNotes.includes(`[${e.ref}]`)));
   }
@@ -142,6 +178,7 @@ export async function runCondenser(deps: CondenserDeps) {
     pages, skipSlugs,
     weekNotes: formatItems(items.filter((i) => !i.ref.startsWith("B"))),
     bootstrapNotes: bootstrapNotes || undefined,
+    bootstrapSlugs,
     today: now.toISOString().slice(0, 10),
     staleLines,
     waitingLines,
@@ -152,14 +189,19 @@ export async function runCondenser(deps: CondenserDeps) {
     // Fail safely: write nothing. Next week's run tries again.
     throw new Error("The AI's answer was not usable JSON, so nothing was written");
   }
-  const { proposals, dropped } = cleanProposals(parsed, items, pages, skipSlugs, staleLines.length > 0);
+  const { proposals, dropped } = cleanProposals(parsed, items, pages, skipSlugs, staleLines.length > 0, bootstrapSlugs);
   if (dropped.length) console.log("weekly-condenser dropped:", dropped.join("; "));
   if (proposals.length === 0) {
     return { ok: true, written: 0, note: "No page needed a change.", dropped, notesRead: weekCount, flaggedSkipped };
   }
 
   const { data: saved, error: insErr } = await db.from("brain_proposals").insert(
-    proposals.map((p) => ({ ...p, user_id: ownerId, status: "pending", auto_applied: shouldAutoApply(p, pages) })),
+    // A first draft written with older notes in view always waits: those notes may be out of date,
+    // and the AI could lean on them without citing them.
+    proposals.map((p) => ({
+      ...p, user_id: ownerId, status: "pending",
+      auto_applied: shouldAutoApply(p, pages) && !(bootstrapNotes && bootstrapSlugs.includes(p.target_slug)),
+    })),
   ).select("id, target_slug, auto_applied");
   if (insErr) fail("Could not save proposals", insErr);
 

@@ -47,9 +47,21 @@ One line each: date, decision, why.
 - Every repo file is served publicly by Vercel, including `tests/`, `pc-setup/` and `package.json`. None hold keys or real user ids.
 - Re-running a digest on another day adds a new entry: the title holds the dates, so "same title updates" only applies to the same dates.
 
+## Overnight build (2026-11-04)
+
+- 2026-11-04: `weekly-digest` and `backfill-links` keep including outdated notes. Brandan's choice.
+- 2026-11-04: `enrich-thought` uses the existing `isServiceCaller`. Yes/no queries showed the webhook sends a service-role JWT with no "Bearer", which that check already accepts. If the token ever stops matching the key and Auth can't be reached, the caller is refused and `backfill-embeddings` repairs what was missed.
+- 2026-11-04: Friday suggestions save through a separate key-protected function, not an MCP tool, so no AI chat can send pushes.
+- 2026-11-04: News lists and suggestions stay out of the condenser and quizzes: neither is a fact about the owner.
+
 ## After go-live (2026-11-03)
 
 - 2026-11-03: `save_to_library` MCP tool added, because Claude reading a page is easier for Brandan than pasting links. Owner comes from `OWNER_USER_ID`, never the arguments; it never writes to `thoughts`; door check and indexing use the same path as the capture functions; re-saving a URL updates that entry.
 - 2026-11-03: Sunday condenser reuses the existing Vault secret `service_role_key`, so nobody handled a key. Test run read 9 notes and wrote 3 first-draft proposals (core, job-search, mega) for Brandan to review.
 - 2026-11-03: `MCP_ACCESS_KEY` printed into a Claude session's log during PC setup, because a masking filter only hid values of 16+ characters. Replacing it was offered and recommended (it's short, and it opens all notes over the internet). Brandan chose to keep it.
 - 2026-11-03: Scheduled task and Claude settings hooks were installed by a script Brandan ran himself, because Claude Code's safety check blocked Claude from doing them.
+
+## Merging the overnight work with automatic updates (2026-11-05)
+
+- 2026-11-05: Where `overnight/finish-brain` and `master` disagreed, `master` won, with one exception Brandan chose: a topic page's first draft waits in Review if older notes were available to it, even if it doesn't cite them, because old notes can be out of date and the AI could use them without saying so. Weekly updates to a page with text stay automatic.
+- 2026-11-05: Older notes back a topic page's first draft only once. A draft that was rejected, undone or left to expire isn't redrafted from them, though new notes can still fill the page. Core keeps `master`'s rule and tries again until it has text.

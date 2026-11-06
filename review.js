@@ -20,6 +20,7 @@
 
   const panel = $('panel-review');
   panel.innerHTML = `
+    <div id="rvHealth"></div>
     <div class="rv-head"><h2>Waiting for review</h2>
       <button class="secondary" id="rvUndo" type="button">Undo last change</button></div>
     <div class="gq-meta">Only big personal changes wait here. Everything else updates on its own each Sunday, and Undo reverses the latest change.</div>
@@ -109,8 +110,33 @@
       : '<div class="pl-empty">Nothing has dropped off yet.</div>';
   }
 
+  // Brain health card. Extra, so if it can't load the card just stays away.
+  function healthCard(h) {
+    const problems = Array.isArray(h.problems) ? h.problems : [];
+    const info = h.info || {};
+    const facts = [
+      [info.proposals_waiting, 'waiting for review'],
+      [info.flagged_library, 'flagged in the library'],
+      [info.stale_notes, 'not touched in 60+ days'],
+      [info.older_untagged, 'older notes without tags'],
+    ].filter(([n]) => Number(n) > 0).map(([n, label]) => `${Number(n)} ${label}`);
+    return `<div class="thought-card rv-card">
+      <div class="rv-page-title">Brain health: ${problems.length ? `${problems.length} to fix` : 'all good'}</div>
+      ${problems.map(p => `<div class="rv-warn">⚠ ${esc(p.text)}</div>`).join('')}
+      ${facts.length ? `<div class="thought-meta">${esc(facts.join(' · '))}</div>` : ''}
+    </div>`;
+  }
+
+  async function loadHealth() {
+    try {
+      const { health } = await act({ action: 'health' });
+      $('rvHealth').innerHTML = health ? healthCard(health) : '';
+    } catch { $('rvHealth').innerHTML = ''; }
+  }
+
   async function loadReview() {
     if (busy) return;
+    loadHealth();
     try {
       const [pr, pg, nt, dr, au] = await Promise.all([
         sb.from('brain_proposals')

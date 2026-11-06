@@ -4,14 +4,14 @@
 //
 // It speaks JSON-RPC 2.0 over HTTP, which is what MCP uses under the hood.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { inBackground, indexLibraryEntry, pickQuizMaterial } from "../_shared/library.ts";
 import { doorCheckViaGateway } from "../_shared/door-check.ts";
 import {
   ADD_THOUGHT_DESCRIPTION, LibraryInputError, MAX_CONTENT_CHARS, SAVE_DOC_TYPES, SAVE_TO_LIBRARY_DESCRIPTION, saveToLibrary,
 } from "../_shared/library-mcp.ts";
 import {
-  ADD_SESSION_LOG_DESCRIPTION, addSessionLog, GET_CORE_DESCRIPTION, getCoreText, MCP_INSTRUCTIONS,
+  ADD_SESSION_LOG_DESCRIPTION, addDoorFlags, addSessionLog, GET_CORE_DESCRIPTION, GET_PAGE_DESCRIPTION, getCoreText, getPageText, labelRecent, MCP_INSTRUCTIONS,
   RECENT_SESSIONS_DESCRIPTION, recentSessions,
 } from "../_shared/core-memory.ts";
 
@@ -56,6 +56,17 @@ const TOOLS = [
     inputSchema: { type: "object", properties: {} },
   },
   {
+    name: "get_page",
+    description: GET_PAGE_DESCRIPTION,
+    inputSchema: {
+      type: "object",
+      properties: {
+        slug: { type: "string", enum: ["job-search", "courses", "mega", "core"], description: "Which page to read" },
+      },
+      required: ["slug"],
+    },
+  },
+  {
     name: "add_session_log",
     description: ADD_SESSION_LOG_DESCRIPTION,
     inputSchema: {
@@ -72,6 +83,14 @@ const TOOLS = [
       },
       required: ["title", "summary"],
     },
+  },
+  {
+    name: "brain_health",
+    description:
+      "Check whether Open Brain is healthy: scheduled jobs that stopped, missing embeddings, new " +
+      "notes without tags, an overdue PC backup (problems), plus counts of flagged library entries, " +
+      "stale notes and proposals waiting (info). Counts and dates only, never note text.",
+    inputSchema: { type: "object", properties: {} },
   },
   {
     name: "recent_sessions",
@@ -458,6 +477,22 @@ Deno.serve(async (req) => {
         return textResult(id, await addSessionLog(supabase, OWNER_USER_ID, args));
       }
 
+      if (toolName === "get_page") {
+        if (!OWNER_USER_ID) {
+          throw new Error("OWNER_USER_ID is not set in Edge Function secrets");
+        }
+        return textResult(id, await getPageText(supabase, OWNER_USER_ID, args.slug));
+      }
+
+      if (toolName === "brain_health") {
+        if (!OWNER_USER_ID) {
+          throw new Error("OWNER_USER_ID is not set in Edge Function secrets");
+        }
+        const { data, error } = await supabase.rpc("brain_health", { p_user: OWNER_USER_ID });
+        if (error) throw new Error(`Could not read brain health: ${error.message}`);
+        return textResult(id, data);
+      }
+
       if (toolName === "search_thoughts") {
         const query = String(args.query ?? "").trim();
 
@@ -526,7 +561,7 @@ Deno.serve(async (req) => {
         const limit = args.limit ?? 10;
         const { data, error } = await supabase
           .from("thoughts")
-          .select("id, content, created_at")
+          .select("id, content, created_at, outdated_at")
           .eq("user_id", OWNER_USER_ID)
           .is("archived_at", null) // moved-to-library thoughts are hidden
           .order("created_at", { ascending: false })
@@ -536,7 +571,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify(rpcResult(id, {
-            content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+            content: [{ type: "text", text: JSON.stringify(labelRecent(data ?? []), null, 2) }],
           })),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
@@ -623,7 +658,7 @@ Deno.serve(async (req) => {
         }));
         const mode = !query ? "filters only (newest first)"
           : queryEmbedding ? "hybrid (meaning + keywords)" : "keyword only (fallback: embeddings unavailable)";
-        return textResult(id, { mode, results });
+        return textResult(id, { mode, results: await addDoorFlags(supabase, OWNER_USER_ID ?? "", results) });
       }
 
       if (toolName === "list_library") {

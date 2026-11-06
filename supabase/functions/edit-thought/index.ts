@@ -16,7 +16,7 @@
 // Thoughts are never deleted.
 // ============================================================================
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { inBackground } from "../_shared/library.ts";
 import { rebuildThought } from "../_shared/thought-edit.ts";
 

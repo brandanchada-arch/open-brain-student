@@ -15,6 +15,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { saveThoughtChunksSafe } from "../_shared/thought-chunks.ts";
 import { linkNeighbors, requestEnrichment } from "../_shared/enrich.ts";
+import { isServiceCaller } from "../_shared/service-caller.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -22,7 +23,7 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // Tags/category/summary prompt, JSON parsing and graph linking live in _shared/enrich.ts
 // (shared with edit-thought since 2026-11-03, so an edited thought is rebuilt the same way).
 
-// Webhook functions always answer 200, even when they skip or fail.
+// Once the caller is checked, this answers 200 even when it skips or fails.
 // The details go to the logs instead.
 function done(message: string) {
   console.log(message);
@@ -60,6 +61,17 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
 }
 
 Deno.serve(async (req) => {
+  // Only your own database webhook may run this. It sends the service role token in the
+  // Authorization header WITHOUT the word "Bearer"; isServiceCaller accepts both forms.
+  // Before changing this, run supabase/sql/checks/enrich-webhook-check.sql.
+  if (!(await isServiceCaller(req))) {
+    console.warn("enrich-thought: refused a caller without the service role token");
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const payload = await req.json().catch(() => null);
     const record = payload?.record;
