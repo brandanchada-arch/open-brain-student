@@ -136,8 +136,8 @@ npx supabase functions deploy open-brain-mcp --no-verify-jwt --project-ref zqbjx
 Then restart Claude Desktop or reconnect its connector to see `get_page` and `brain_health`.
 
 **What happens next:** the next Sunday run drafts the empty Courses page, unless Courses already has a proposal by then.
-Like any other change, the draft applies by itself. It waits in Brain → Review only if it mentions something personal or rests only on library entries. You can undo it in Review.
-A draft you undo, reject or leave to expire (14 days) isn't tried again from older notes, and later weekly updates still work as normal.
+The draft waits in Brain → Review for your approval, because older notes can be out of date. Brain Calendar's morning summary is built to say when brain updates are waiting, but this wasn't confirmed live, so **look in Review after that Sunday.**
+You have 14 days. A draft you reject or leave to expire isn't tried again from older notes, and Courses stays empty unless new notes fill it. While a draft waits, that page gets no other updates. Once a page has text, its weekly updates apply by themselves.
 
 **Undo:** redeploy both from `master`. Nothing else changed.
 

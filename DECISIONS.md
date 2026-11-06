@@ -63,5 +63,5 @@ One line each: date, decision, why.
 
 ## Merging the overnight work with automatic updates (2026-11-05)
 
-- 2026-11-05: Where `overnight/finish-brain` and `master` disagreed, `master` won. So a topic page's first draft from older notes now applies by itself like any other change, instead of always waiting in Review as the overnight brief planned. It still waits if it's personal or rests only on the library, and it can be undone. Brandan can still choose to make these drafts wait.
+- 2026-11-05: Where `overnight/finish-brain` and `master` disagreed, `master` won, with one exception Brandan chose: a topic page's first draft waits in Review if older notes were available to it, even if it doesn't cite them, because old notes can be out of date and the AI could use them without saying so. Weekly updates to a page with text stay automatic.
 - 2026-11-05: Older notes back a topic page's first draft only once. A draft that was rejected, undone or left to expire isn't redrafted from them, though new notes can still fill the page. Core keeps `master`'s rule and tries again until it has text.

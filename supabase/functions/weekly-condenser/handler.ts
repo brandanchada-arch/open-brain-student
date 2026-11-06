@@ -196,7 +196,12 @@ export async function runCondenser(deps: CondenserDeps) {
   }
 
   const { data: saved, error: insErr } = await db.from("brain_proposals").insert(
-    proposals.map((p) => ({ ...p, user_id: ownerId, status: "pending", auto_applied: shouldAutoApply(p, pages) })),
+    // A first draft written with older notes in view always waits: those notes may be out of date,
+    // and the AI could lean on them without citing them.
+    proposals.map((p) => ({
+      ...p, user_id: ownerId, status: "pending",
+      auto_applied: shouldAutoApply(p, pages) && !(bootstrapNotes && bootstrapSlugs.includes(p.target_slug)),
+    })),
   ).select("id, target_slug, auto_applied");
   if (insErr) fail("Could not save proposals", insErr);
 
