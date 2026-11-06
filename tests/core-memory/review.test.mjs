@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { handleReview } from '../../supabase/functions/review-proposal/handler.ts';
+import { fakeDb } from './fake-db.mjs';
 
 const ME = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
@@ -15,7 +16,10 @@ function deps({ rpcResult = { data: { ok: true, slug: 'core' }, error: null } } 
   return {
     calls,
     getUser: async (h) => (h === GOOD_TOKEN ? { id: ME } : null),
-    admin: { rpc: async (name, args) => { calls.push({ name, args }); return typeof rpcResult === 'function' ? rpcResult(name, args) : rpcResult; } },
+    admin: {
+      rpc: async (name, args) => { calls.push({ name, args }); return typeof rpcResult === 'function' ? rpcResult(name, args) : rpcResult; },
+      from: () => fakeDb({}).from('none'), // no stored proposal to merge in these tests
+    },
   };
 }
 

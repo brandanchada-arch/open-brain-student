@@ -49,7 +49,7 @@ const goodAnswer = JSON.stringify({ proposals: [
 ] });
 
 test('reads only this week\'s own, active notes; skips flagged library rows; writes proposals with sources', async () => {
-  const db = fakeDb(world());
+  const db = fakeDb(world(), { approve_brain_proposal: () => ({ ok: true }) });
   const llm = fakeLlm(goodAnswer);
   const r = await runCondenser({ db, ownerId: ME, callLlm: llm, repair: jsonrepair, now: NOW });
 
@@ -68,11 +68,10 @@ test('reads only this week\'s own, active notes; skips flagged library rows; wri
 
   const p = db.data.brain_proposals[0];
   assert.equal(p.user_id, ME);
-  assert.equal(p.status, 'pending');
   assert.equal(p.target_slug, 'job-search');
   assert.deepEqual(p.source_ids.map(s => s.id), ['t-new']);
   assert.equal(p.source_ids[0].kind, 'thought');
-  // It never touches the pages themselves.
+  // It only changes pages through the approve function, so undo and history work.
   assert.equal(db.data.brain_pages.find(x => x.slug === 'core').current_text, '## Who I am\nA sample student.');
   assert.equal(db.data.brain_pages.length, 4); // missing pages were created empty
 });
@@ -115,7 +114,7 @@ test('first run with an empty core page also reads capped summaries of older act
   assert.deepEqual(p.source_ids.map(s => s.id).sort(), ['t-new', 't-sum']);
 });
 
-test('pages with a pending proposal are skipped; all pending = no AI call', async () => {
+test('an empty page with a first draft waiting is skipped; all waiting that way = no AI call', async () => {
   const db = fakeDb(world({ brain_proposals: [{ user_id: ME, target_slug: 'job-search', status: 'pending', proposed_text: 'x' }] }));
   const llm = fakeLlm(goodAnswer);
   const r = await runCondenser({ db, ownerId: ME, callLlm: llm, now: NOW });
@@ -124,9 +123,64 @@ test('pages with a pending proposal are skipped; all pending = no AI call', asyn
 
   const all = ['core', 'job-search', 'courses', 'mega'].map(s => ({ user_id: ME, target_slug: s, status: 'pending', proposed_text: 'x' }));
   const llm2 = fakeLlm(goodAnswer);
-  const r2 = await runCondenser({ db: fakeDb(world({ brain_proposals: all })), ownerId: ME, callLlm: llm2, now: NOW });
+  const r2 = await runCondenser({ db: fakeDb(world({ brain_pages: [], brain_proposals: all })), ownerId: ME, callLlm: llm2, now: NOW });
   assert.equal(r2.skipped, true);
   assert.equal(llm2.calls.length, 0);
+});
+
+test('a change waiting on a page with text does not stop that page updating, and is not asked again', async () => {
+  const pages = [{ user_id: ME, slug: 'core', current_text: '## Who I am\nA student.' }];
+  const waiting = [{ user_id: ME, target_slug: 'core', status: 'pending', base_text: '## Who I am\nA student.', proposed_text: '## Who I am\nA student.\nStarted going to church.', created_at: days(7) }];
+  const a = approvals();
+  const db = fakeDb(world({ brain_pages: pages, brain_proposals: waiting }), a.handlers);
+  const llm = fakeLlm(answerFor('core', '## Who I am\nA student.\nLikes short plans.'));
+  const r = await runCondenser({ db, ownerId: ME, callLlm: llm, now: NOW });
+  assert.deepEqual(r.applied, ['core']);
+  assert.doesNotMatch(llm.calls[0].prompt, /### core\n\(Skip this page/);
+  assert.match(llm.calls[0].prompt, /ALREADY WAITING[\s\S]*Started going to church/);
+});
+
+test('a proposal with a personal line and an everyday line splits: everyday applies, personal waits', async () => {
+  const pages = [{ user_id: ME, slug: 'core', current_text: '## Who I am\nA student.' }];
+  const a = approvals();
+  const db = fakeDb(world({ brain_pages: pages }), a.handlers);
+  const answer = answerFor('core', '## Who I am\nA student.\nLikes short plans.\nStarted going to church.');
+  const r = await runCondenser({ db, ownerId: ME, callLlm: fakeLlm(answer), now: NOW });
+  assert.deepEqual(r.applied, ['core']);
+  const [everyday, personal] = db.data.brain_proposals;
+  assert.equal(everyday.auto_applied, true);
+  assert.equal(everyday.proposed_text, '## Who I am\nA student.\nLikes short plans.');
+  assert.equal(personal.auto_applied, false);
+  assert.equal(personal.proposed_text, '## Who I am\nA student.\nStarted going to church.');
+  assert.equal(personal.base_text, '## Who I am\nA student.');
+});
+
+test('the AI can name a personal line that has no keyword', async () => {
+  const pages = [{ user_id: ME, slug: 'core', current_text: "## What's true now\nI struggle with focus." }];
+  const a = approvals();
+  const db = fakeDb(world({ brain_pages: pages }), a.handlers);
+  const answer = JSON.stringify({ proposals: [{
+    target_slug: 'core', reason: 'r', sources: ['T1'],
+    proposed_text: "## What's true now\nI've grown out of that focus struggle.",
+    personal_lines: ["I've grown out of that focus struggle.", 'I struggle with focus.'],
+  }] });
+  const r = await runCondenser({ db, ownerId: ME, callLlm: fakeLlm(answer), now: NOW });
+  assert.deepEqual(r.applied, []);
+  assert.equal(db.data.brain_proposals[0].sensitive, true);
+});
+
+test('a reworded personal line does not wait, and is kept for the dropped list to skip', async () => {
+  const pages = [{ user_id: ME, slug: 'core', current_text: "## What's true now\nI go to church weekly." }];
+  const a = approvals();
+  const db = fakeDb(world({ brain_pages: pages }), a.handlers);
+  const answer = JSON.stringify({ proposals: [{
+    target_slug: 'core', reason: 'r', sources: ['T1'],
+    proposed_text: "## What's true now\nI attend church every week.",
+    reworded: [{ from: 'I go to church weekly.', to: 'I attend church every week.' }, { from: 'Never on the page', to: 'I attend church every week.' }],
+  }] });
+  const r = await runCondenser({ db, ownerId: ME, callLlm: fakeLlm(answer), now: NOW });
+  assert.deepEqual(r.applied, ['core']);
+  assert.deepEqual(db.data.brain_proposals[0].reworded, ['I go to church weekly.']);
 });
 
 test('unusable AI answer: throws and writes nothing', async () => {
@@ -158,7 +212,97 @@ test('proposals are checked: unknown page, no valid sources, too long, no change
   assert.equal(dropped.length, 5);
 });
 
-test('sensitive: set by the AI, by keywords, or by a journal source; plain coursework is not', () => {
+const approvals = () => {
+  const calls = [];
+  return { calls, handlers: { approve_brain_proposal: (args) => { calls.push(args); return { ok: true }; } } };
+};
+const answerFor = (slug, text, sources = ['T1'], sensitive = false) =>
+  JSON.stringify({ proposals: [{ target_slug: slug, proposed_text: text, reason: 'r', sources, sensitive }] });
+
+test('an everyday change applies by itself through the approve function', async () => {
+  const a = approvals();
+  const db = fakeDb(world(), a.handlers);
+  const r = await runCondenser({ db, ownerId: ME, callLlm: fakeLlm(goodAnswer), now: NOW });
+  assert.deepEqual(r.applied, ['job-search']);
+  assert.equal(a.calls.length, 1);
+  assert.equal(a.calls[0].p_user_id, ME);
+  assert.equal(a.calls[0].p_proposal_id, db.data.brain_proposals[0].id);
+  assert.equal(db.data.brain_proposals[0].auto_applied, true);
+});
+
+test('a big personal change waits for approval, flagged by the AI or by a changed line', async () => {
+  for (const answer of [
+    answerFor('core', '## Who I am\nA sample student.\nLikes long walks.', ['T1'], true),
+    answerFor('core', '## Who I am\nA sample student.\nStarted going to church.'),
+  ]) {
+    const a = approvals();
+    const db = fakeDb(world(), a.handlers);
+    const r = await runCondenser({ db, ownerId: ME, callLlm: fakeLlm(answer), now: NOW });
+    assert.deepEqual(r.applied, []);
+    assert.equal(a.calls.length, 0);
+    assert.equal(db.data.brain_proposals[0].status, 'pending');
+    assert.equal(db.data.brain_proposals[0].auto_applied, false);
+  }
+});
+
+test('a page that already mentions faith still updates by itself for an unrelated change', async () => {
+  const pages = [{ user_id: ME, slug: 'core', current_text: "## What's true now\nI attend church." }];
+  const a = approvals();
+  const db = fakeDb(world({ brain_pages: pages }), a.handlers);
+  const answer = answerFor('core', "## What's true now\nI attend church.\nI prefer short plans.");
+  const r = await runCondenser({ db, ownerId: ME, callLlm: fakeLlm(answer), now: NOW });
+  assert.deepEqual(r.applied, ['core']);
+});
+
+test('removing a personal line counts as a big personal change', async () => {
+  const pages = [{ user_id: ME, slug: 'core', current_text: "## What's true now\nI attend church.\nI like plans." }];
+  const a = approvals();
+  const db = fakeDb(world({ brain_pages: pages }), a.handlers);
+  const r = await runCondenser({ db, ownerId: ME, callLlm: fakeLlm(answerFor('core', "## What's true now\nI like plans.")), now: NOW });
+  assert.deepEqual(r.applied, []);
+});
+
+test('the first core page and changes based only on the library wait for approval', async () => {
+  const empty = approvals();
+  const db1 = fakeDb(world({ brain_pages: [] }), empty.handlers);
+  await runCondenser({ db: db1, ownerId: ME, callLlm: fakeLlm(answerFor('core', '## Who I am\nFirst draft.')), now: NOW });
+  assert.equal(empty.calls.length, 0);
+
+  const lib = approvals();
+  const db2 = fakeDb(world(), lib.handlers);
+  // T1 is the one thought this week; L1 is the library row.
+  await runCondenser({ db: db2, ownerId: ME, callLlm: fakeLlm(answerFor('courses', 'From an article', ['L1'])), now: NOW });
+  assert.equal(lib.calls.length, 0);
+  assert.equal(db2.data.brain_proposals[0].status, 'pending');
+});
+
+test('if applying fails, the change stays waiting and the run still succeeds', async () => {
+  const db = fakeDb(world(), { approve_brain_proposal: () => { throw new Error('boom'); } });
+  const realError = console.error; console.error = () => {};
+  try {
+    const r = await runCondenser({ db, ownerId: ME, callLlm: fakeLlm(goodAnswer), now: NOW });
+    assert.deepEqual(r.applied, []);
+    assert.equal(db.data.brain_proposals[0].status, 'pending');
+  } finally { console.error = realError; }
+});
+
+test('an approval unanswered for 14 days expires and stops holding its page', async () => {
+  const waiting = [
+    { user_id: ME, target_slug: 'job-search', status: 'pending', proposed_text: 'old', created_at: days(15) },
+    { user_id: ME, target_slug: 'courses', status: 'pending', proposed_text: 'recent', created_at: days(13) },
+    { user_id: OTHER, target_slug: 'job-search', status: 'pending', proposed_text: 'not mine', created_at: days(15) },
+  ];
+  const db = fakeDb(world({ brain_proposals: waiting }), approvals().handlers);
+  const llm = fakeLlm(goodAnswer);
+  await runCondenser({ db, ownerId: ME, callLlm: llm, now: NOW });
+  assert.equal(db.data.brain_proposals[0].status, 'rejected');
+  assert.equal(db.data.brain_proposals[1].status, 'pending');
+  assert.equal(db.data.brain_proposals[2].status, 'pending');
+  assert.doesNotMatch(llm.calls[0].prompt, /### job-search\n\(Skip this page/);
+  assert.match(llm.calls[0].prompt, /### courses\n\(Skip this page/);
+});
+
+test('sensitive: set by the AI or by keywords in what changed; plain coursework is not', () => {
   assert.ok(looksSensitive('Started therapy on Mondays'));
   assert.ok(looksSensitive('Went to church with family'));
   assert.ok(looksSensitive('Paying off my student loans'));
@@ -173,7 +317,7 @@ test('sensitive: set by the AI, by keywords, or by a journal source; plain cours
     { target_slug: 'courses', proposed_text: 'Class at 9', sources: ['T2'] },
     { target_slug: 'mega', proposed_text: 'Plan B', sources: ['T2'], sensitive: true },
   ] }, items, {}, []);
-  assert.deepEqual(proposals.map(p => p.sensitive), [true, false, true]);
+  assert.deepEqual(proposals.map(p => p.sensitive), [false, false, true]);
 });
 
 test('the prompt treats notes as data and the function has the service-caller check', () => {

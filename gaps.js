@@ -64,11 +64,11 @@ function renderGaps(state) {
     meta.textContent = '';
     btn.className = ''; btn.textContent = 'Find gaps';
     list.innerHTML = `<div class="gq-card gq-done"><div class="big">What's missing?</div>
-      <div class="gq-why">Your brain reads your last 30 days and asks about things you started but never finished writing down.</div></div>`;
+      <div class="gq-why">Your brain looks across all your notes and asks deeper questions to understand you better. Each run picks a different mix.</div></div>`;
     return;
   }
   if (state.idx === undefined) gapsNext(state);
-  meta.textContent = `From your last 30 days of thoughts · ${gqWhen(state.at)}`;
+  meta.textContent = `From across all your thoughts · ${gqWhen(state.at)}`;
   const qs = state.questions;
   if (state.idx >= qs.length) {
     const saved = qs.filter(x => x.status === 'saved' || x.saved).length;
