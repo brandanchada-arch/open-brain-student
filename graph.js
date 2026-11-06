@@ -21,7 +21,10 @@
   const K_MIN = 0.15, K_MAX = 6;
   // Earthy topic colours: terracotta, moss, ochre, berry, slate teal, walnut, then a few spares.
   const PALETTE = ['#B4532A', '#5F7A3A', '#B07D1E', '#7C3F5E', '#3E6B70', '#8A5A3B', '#6D7F2E', '#9A4A44', '#55606E', '#A0702A'];
-  const INK = '#2E2419', BRANCH = 'rgba(110, 84, 58, ';
+  const isDark = () => document.documentElement.getAttribute('data-theme') !== 'light';
+  const INK = () => isDark() ? '#F1E7D6' : '#2E2419';
+  const BRANCH = () => isDark() ? 'rgba(190, 165, 130, ' : 'rgba(110, 84, 58, ';
+  const halo = (a) => isDark() ? `rgba(28, 23, 18, ${a})` : `rgba(250, 244, 232, ${a})`;
 
   // ---------- small helpers ----------
   function hash(s) { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; }
@@ -29,6 +32,7 @@
   const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
   const lighten = (c, t) => c.map(v => Math.round(v + (255 - v) * t));
   const darken = (c, t) => c.map(v => Math.round(v * (1 - t)));
+  const seedTone = (c) => isDark() ? lighten(c, 0.2) : c;      // soil colors need lifting at night
 
   const G = {
     nodes: [], byId: new Map(), edges: [], clusters: [], cById: new Map(),
@@ -217,7 +221,7 @@
       const same = a.c1 === b.c1, col = same && G.cById.get(a.c1) ? G.cById.get(a.c1).rgb : null;
       const base = (0.22 + (e.w - 0.5) * 0.9);
       const alpha = lit ? (dimAll ? 0.85 : Math.max(0.16, base)) : 0.06;
-      g.strokeStyle = col ? rgba(darken(col, 0.1), alpha) : BRANCH + (alpha * 0.85) + ')';
+      g.strokeStyle = col ? rgba(isDark() ? lighten(col, 0.25) : darken(col, 0.1), alpha) : BRANCH() + (alpha * 0.85) + ')';
       g.lineWidth = (0.7 + Math.max(0, e.w - 0.5) * 3.2) * Math.min(1.8, Math.max(0.6, Math.sqrt(k))) * (lit && dimAll ? 1.5 : 1);
       g.beginPath(); g.moveTo(ax, ay); g.quadraticCurveTo(cx, cy, bx, by); g.stroke();
     }
@@ -226,7 +230,7 @@
     const labels = [];
     for (const n of G.nodes) {
       if (!shown(n) || !inView(n)) continue;
-      const cl = G.cById.get(n.c1), rgb = cl ? cl.rgb : [138, 120, 100];
+      const cl = G.cById.get(n.c1), rgb = seedTone(cl ? cl.rgb : [138, 120, 100]);
       const x = sx(n.x), y = sy(n.y), r = seedR(n);
       const lit = focus ? focus.has(n.id) : G.matches ? G.matches.has(n.id) : true;
       g.globalAlpha = lit ? 1 : 0.2;
@@ -249,7 +253,7 @@
       g.restore();
       const isFocus = n === G.selected || n === G.hover;
       if (isFocus || (G.matches && G.matches.has(n.id))) {
-        g.globalAlpha = 1; g.strokeStyle = isFocus ? INK : rgba([176, 125, 30], 1); g.lineWidth = 2;
+        g.globalAlpha = 1; g.strokeStyle = isFocus ? INK() : rgba([217, 164, 65], 1); g.lineWidth = 2;
         g.setLineDash(isFocus ? [] : [3, 3]);
         g.beginPath(); g.arc(x, y, r + 5, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
       }
@@ -264,15 +268,15 @@
       const fs = Math.max(13, Math.min(22, 15 * Math.sqrt(k)));
       g.font = `italic 600 ${fs}px Fraunces, Georgia, serif`;
       const x = sx(cl.cx), y = sy(cl.cy) - (34 + Math.sqrt(cl.size) * 16) * k - 6;
-      g.lineWidth = 4; g.strokeStyle = 'rgba(250, 244, 232, 0.92)'; g.strokeText(cl.name, x, y);
-      g.fillStyle = rgba(darken(cl.rgb, 0.35), dimAll ? 0.55 : 1); g.fillText(cl.name, x, y);
+      g.lineWidth = 4; g.strokeStyle = halo(0.92); g.strokeText(cl.name, x, y);
+      g.fillStyle = rgba(isDark() ? lighten(cl.rgb, 0.45) : darken(cl.rgb, 0.35), dimAll ? 0.55 : 1); g.fillText(cl.name, x, y);
     }
     // seed labels (only when zoomed in, or for search matches)
     g.textAlign = 'left'; g.font = '600 12px "Nunito Sans", system-ui, sans-serif';
     for (const [n, x, y, r] of labels.slice(0, 70)) {
       const t = n.label.length > 38 ? n.label.slice(0, 37) + '…' : n.label;
-      g.lineWidth = 3.5; g.strokeStyle = 'rgba(250, 244, 232, 0.95)'; g.strokeText(t, x + r + 6, y);
-      g.fillStyle = INK; g.fillText(t, x + r + 6, y);
+      g.lineWidth = 3.5; g.strokeStyle = halo(0.95); g.strokeText(t, x + r + 6, y);
+      g.fillStyle = INK(); g.fillText(t, x + r + 6, y);
     }
   }
 
@@ -289,6 +293,7 @@
     if (G.tween) G.raf = requestAnimationFrame(frame);
   }
   function wake() { G.dirty = true; if (!G.raf && G.visible) G.raf = requestAnimationFrame(frame); }
+  document.addEventListener('themechange', () => wake());
 
   // ---------- camera ----------
   function animateTo(to, ms = 380) {

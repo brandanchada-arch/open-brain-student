@@ -6,7 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>My Open Brain</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#F3EADA">
+<script src="theme.js"></script>
+<meta name="theme-color" content="#1C1712">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -40,6 +41,20 @@
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --nav-h: 66px;
+  }
+  :root { --toast-ok-bg: #E4ECD3; --toast-ok: #3B6524; --toast-err-bg: #F7DDD4; --toast-err: #9E3226;
+    --toggle-bg: var(--raised); --toggle-fg: var(--text); --toggle-line: var(--line-2); --toggle-right: 118px; }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #1C1712; --surface: #262019; --surface-2: #2C251D; --raised: #322A21;
+    --line: #3D3327; --line-2: #554735;
+    --text: #F1E7D6; --muted: #C2B29A; --faint: #9D8D76;
+    --accent: #D4693A; --accent-hover: #E07B4C; --accent-ink: #1E120A; --accent-soft: #40261A; --accent-text: #EE9A6E;
+    --moss: #8FAE5A; --moss-soft: #2C3420; --ochre: #D9A441; --ochre-soft: #3A2E14; --clay: #C48F6B; --teal: #7DB5B2; --teal-soft: #1F3130;
+    --berry: #C983A8;
+    --ok: #9CC56F; --ok-bg: #25301A; --err: #EC8672; --err-bg: #3A1F19;
+    --shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 10px 24px -16px rgba(0,0,0,.7), 0 2px 4px -2px rgba(0,0,0,.4);
+    --toast-ok-bg: #25301A; --toast-ok: #9CC56F; --toast-err-bg: #3A1F19; --toast-err: #EC8672;
   }
   [hidden] { display: none !important; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -359,6 +374,34 @@
   }
 
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  :root[data-theme="dark"] .demo-badge { color: #E8C27A; border-color: #6B5524; }
+  /* Night garden: the same paper and soil, after dark */
+  :root[data-theme="dark"] body { background-image:
+    radial-gradient(ellipse 80% 60% at 12% 0%, rgba(90,70,45,.25), rgba(90,70,45,0) 70%),
+    radial-gradient(ellipse 70% 60% at 100% 100%, rgba(0,0,0,.25), rgba(0,0,0,0) 70%),
+    repeating-linear-gradient(3deg, rgba(255,235,205,.012) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(93deg, rgba(255,235,205,.01) 0 1px, transparent 1px 5px); }
+  :root[data-theme="dark"] button.secondary:hover, :root[data-theme="dark"] .chip:hover, :root[data-theme="dark"] .graph-tool:hover { background: #3A3025; }
+  :root[data-theme="dark"] .chip.active:not(.legend-chip), :root[data-theme="dark"] .graph-tool[aria-pressed="true"], :root[data-theme="dark"] .gq-got { color: #191C10; }
+  :root[data-theme="dark"] .gq-got:hover { background: #A3C26B; }
+  :root[data-theme="dark"] .composer { background: linear-gradient(180deg, #2E2720, var(--surface)); }
+  :root[data-theme="dark"] .dot { background: #6E604C; }
+  :root[data-theme="dark"] .dot.on { background: var(--moss); }
+  :root[data-theme="dark"] .dot.off { background: var(--err); }
+  :root[data-theme="dark"] .msg.ok, :root[data-theme="dark"] .et-toast { border-color: #3F5228; }
+  :root[data-theme="dark"] .msg.err, :root[data-theme="dark"] .gq-miss, :root[data-theme="dark"] .et-toast.err { border-color: #6B352A; }
+  :root[data-theme="dark"] .offline-bar, :root[data-theme="dark"] .door-flag { color: #E8C27A; border-color: #6B5524; }
+  :root[data-theme="dark"] .door-flag .door-reasons { color: #D9B878; }
+  :root[data-theme="dark"] .ask-kind.ask-old, :root[data-theme="dark"] .et-badge { color: #E8C27A; }
+  :root[data-theme="dark"] .ask-card { background: linear-gradient(180deg, #2B2A1E, var(--surface)); }
+  :root[data-theme="dark"] .gq-answer-box { border-color: #45542E; }
+  :root[data-theme="dark"] .graph-wrap { background-color: #211B15; background-image:
+    radial-gradient(ellipse at 50% 45%, rgba(90,72,48,.35), rgba(90,72,48,0) 70%),
+    repeating-radial-gradient(circle at 50% 120%, rgba(255,235,205,.018) 0 1px, transparent 1px 22px);
+    box-shadow: inset 0 2px 10px rgba(0,0,0,.35), var(--shadow); }
+  :root[data-theme="dark"] .graph-note, :root[data-theme="dark"] .graph-card, :root[data-theme="dark"] .tabbar { background: rgba(38,32,25,.97); }
+  :root[data-theme="dark"] .graph-tool { background: rgba(50,42,33,.92); }
+  @media (max-width: 767px) { #themeToggle { top: auto !important; right: auto !important; left: 12px; bottom: calc(var(--safe-bottom) + 92px); } }
 </style>
 </head>
 <body>
