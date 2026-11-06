@@ -586,8 +586,7 @@
     });
     if (window.ResizeObserver) new ResizeObserver(resize).observe(c.parentElement);
     window.addEventListener('resize', resize);
-    const dark = mq('(prefers-color-scheme: dark)');
-    if (dark.addEventListener) dark.addEventListener('change', () => { readTheme(); redraw(); });
+    document.addEventListener('themechange', () => { readTheme(); redraw(); });
     document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); else if (G.visible) start(); });
     window.addEventListener('online', () => { if (G.visible) fetchGraph({ quiet: true }); });
   }

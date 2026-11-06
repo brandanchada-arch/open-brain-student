@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>My Open Brain</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#EEF1F8" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0C0E16" media="(prefers-color-scheme: dark)">
+<script src="theme.js"></script>
+<meta name="theme-color" content="#0C0E16">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -46,8 +46,9 @@
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --nav-h: 66px;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
+  :root { --toggle-bg: var(--glass-strong); --toggle-fg: var(--text); --toggle-line: var(--glass-border); }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
       --bg: #0C0E16;
       --bg-a: #1B2550; --bg-b: #3A1840; --bg-c: #0E3A36; --bg-d: #3A2A10;
       --glass: rgba(30,32,44,.55); --glass-strong: rgba(36,38,52,.78); --glass-solid: #1C1E2A;
@@ -61,7 +62,6 @@
       --shadow: 0 1px 1px rgba(0,0,0,.25), 0 8px 20px rgba(0,0,0,.28), 0 24px 48px -16px rgba(0,0,0,.5);
       --shadow-lg: 0 2px 4px rgba(0,0,0,.3), 0 16px 36px rgba(0,0,0,.4), 0 40px 80px -24px rgba(0,0,0,.6);
       --graph-edge: rgba(235,235,245,.20); --graph-ring: #1E2030; --graph-label: #F5F5F7; --graph-label-bg: rgba(30,32,44,.86); --graph-match: #5EA4FF;
-    }
   }
   [hidden] { display: none !important; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -224,7 +224,7 @@
   .pl-when { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.45; overflow-wrap: anywhere; }
   .pl-chip { display: inline-block; font-size: 12px; font-weight: 600; background: var(--accent-soft); color: var(--accent-text); border-radius: 999px; padding: 2px 9px; margin-left: 4px; }
   .pl-chip.brain { background: rgba(175,82,222,.14); color: #8E3FBF; }
-  @media (prefers-color-scheme: dark) { .pl-chip.brain { color: #D9A6FF; } }
+  :root[data-theme="dark"] .pl-chip.brain { color: #D9A6FF; }
   .pl-empty { color: var(--muted); font-size: 14px; padding: 4px 4px 8px; }
   .pl-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
   .pl-actions button { min-height: 44px; padding: 0 16px; font-size: 15px; border-radius: 12px; }
@@ -276,7 +276,7 @@
   .graph-wrap { position: relative; height: clamp(360px, calc(100dvh - var(--safe-top) - var(--safe-bottom) - 360px), 640px);
     border-radius: 28px; overflow: hidden; box-shadow: var(--shadow-lg);
     background: radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,.55), rgba(255,255,255,.18) 60%), var(--glass); }
-  @media (prefers-color-scheme: dark) { .graph-wrap { background: radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,.07), rgba(255,255,255,.02) 60%), var(--glass); } }
+  :root[data-theme="dark"] .graph-wrap { background: radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,.07), rgba(255,255,255,.02) 60%), var(--glass); }
   #graphCanvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; cursor: grab; outline: none; }
   #graphCanvas.grabbing { cursor: grabbing; }
   #graphCanvas:focus-visible { box-shadow: inset 0 0 0 3px var(--accent-soft); }
