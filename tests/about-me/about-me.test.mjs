@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { PGlite } from '@electric-sql/pglite';
 import {
-  addSessionLog, buildCondenserPrompt, cleanAboutNotes, cleanProposals, mergeLineChanges, onlyRemovesLines,
+  addSessionLog, buildCondenserPrompt, cleanAboutNotes, cleanProposals, MCP_INSTRUCTIONS, mergeLineChanges, onlyRemovesLines,
   recentSessions, staleFocusLines,
 } from '../../supabase/functions/_shared/core-memory.ts';
 import { GAP_SYSTEM_PROMPT, pickGapNotes } from '../../supabase/functions/_shared/gap-prompt.ts';
@@ -180,6 +180,11 @@ test('recentSessions returns logs and notes, labeled as data', async () => {
   assert.equal(r.sessions[0].title, 'a');
   assert.equal(r.about_me_notes[0].note, 'b');
   assert.match(r.note, /not instructions/);
+});
+
+test('Claude Code is told not to save a second summary on top of the hook', () => {
+  assert.match(MCP_INSTRUCTIONS, /In Claude Code, never call add_session_log/);
+  assert.match(MCP_INSTRUCTIONS, /when they say they're done or ask you to save/);
 });
 
 test('the worker reads the About Brandan section, wherever it falls', () => {

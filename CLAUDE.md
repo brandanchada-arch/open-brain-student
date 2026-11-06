@@ -61,7 +61,7 @@ explain changes in plain language.
 - Schema changes: run with `npx supabase db query --linked --yes -f <file>.sql` from this folder (or the SQL Editor); `migration.sql` is only the original Level 1 table. Read-only queries: use `--read-only` instead of `--yes`.
 
 ## Checking before you ship
-`npm install` once, then `npm run check`: JS syntax, Deno type-check of every function, all tests, SQL load test. Needs Node 22.18+. Nothing real is contacted. Deno isn't installed on the PC; set `DENO_BIN` to a `deno.exe` or the type-check shows `skip`. 4 session-log tests skip on Windows (they need a shell script) and 3 browser tests skip without Playwright. They run in the cloud.
+`npm install` once, then `npm run check`: JS syntax, Deno type-check of every function, all tests, SQL load test. Needs Node 22.18+. Nothing real is contacted. Deno isn't installed system-wide, so set `$env:DENO_BIN="$env:USERPROFILE\.open-brain\bin\deno.exe"` first or the type-check shows `skip`. 4 session-log tests skip on Windows (they need a shell script) and 3 browser tests skip without Playwright. They run in the cloud.
 
 ## Deploying
 Always from this folder (running from `C:\Users\josep` fails with "Entrypoint path does not exist"):
