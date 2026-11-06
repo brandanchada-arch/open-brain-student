@@ -29,7 +29,7 @@
       t.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);z-index:30;bottom:calc(env(safe-area-inset-bottom,0px) + 92px);max-width:calc(100% - 40px);padding:9px 14px;border-radius:8px;font-size:13px;font-weight:500;transition:opacity .2s;';
       document.body.appendChild(t);
     }
-    t.style.background = ok ? '#1D1E20' : '#C2413B'; t.style.color = '#FFFFFF';
+    t.style.background = ok ? 'var(--toast)' : '#C2413B'; t.style.color = '#FFFFFF';
     t.textContent = text; t.style.opacity = '1';
     clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = '0'; }, 2600);
   }

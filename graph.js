@@ -20,7 +20,19 @@
   const POLL_MS = 40000;
   const MIN_K = 0.15, MAX_K = 8;
   const GREY = '#A3A6AD';
-  const EDGE = 'rgba(120,124,132,0.22)', EDGE_HI = 'rgba(60,64,72,0.55)';
+  const isDark = () => document.documentElement.getAttribute('data-theme') !== 'light';
+  const EDGE = () => isDark() ? 'rgba(170,175,185,0.26)' : 'rgba(120,124,132,0.22)';
+  const EDGE_HI = () => isDark() ? 'rgba(215,220,230,0.65)' : 'rgba(60,64,72,0.55)';
+  const ACCENT = () => isDark() ? '#7C9AF2' : '#3E63DD';
+  const INK = () => isDark() ? '#ECEDEE' : '#1D1E20';
+  const DOT_EDGE = () => isDark() ? '#1B1C1F' : '#FFFFFF';
+  // Topic colors are muted for a white page, so lift them on a dark one.
+  const lifted = new Map();
+  const dotColor = (hex) => {
+    if (!isDark() || !/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+    if (!lifted.has(hex)) lifted.set(hex, '#' + [1, 3, 5].map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * 0.68 + 255 * 0.32).toString(16).padStart(2, '0')).join(''));
+    return lifted.get(hex);
+  };
 
   // ---------- seeded random: the map looks the same every time you open it ----------
   function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
@@ -171,6 +183,7 @@
 
   // ---------- drawing (only when something changed) ----------
   function redraw() { if (G.visible && !G.raf && G.W) G.raf = requestAnimationFrame(frame); }
+  document.addEventListener('themechange', () => redraw());
   function frame(now) {
     G.raf = 0;
     if (G.anim) {
@@ -193,7 +206,7 @@
 
     // edges: one path for the quiet ones, one for the highlighted ones
     g.lineWidth = 1;
-    g.beginPath(); g.strokeStyle = (searching || near) ? 'rgba(120,124,132,0.10)' : EDGE;
+    g.beginPath(); g.strokeStyle = (searching || near) ? 'rgba(120,124,132,0.10)' : EDGE();
     const hi = [];
     for (const e of G.edges) {
       if (!edgeShown(e)) continue;
@@ -204,7 +217,7 @@
     }
     g.stroke();
     if (hi.length) {
-      g.beginPath(); g.strokeStyle = EDGE_HI;
+      g.beginPath(); g.strokeStyle = EDGE_HI();
       for (const e of hi) { const p = toScreen(e.a), q = toScreen(e.b); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); }
       g.stroke();
     }
@@ -216,8 +229,8 @@
       if (p.x < -margin || p.y < -margin || p.x > G.W + margin || p.y > G.H + margin) return;
       g.globalAlpha = alpha;
       g.beginPath(); g.arc(p.x, p.y, r, 0, Math.PI * 2);
-      g.fillStyle = n.color; g.fill();
-      g.lineWidth = 1; g.strokeStyle = '#FFFFFF'; g.stroke();
+      g.fillStyle = dotColor(n.color); g.fill();
+      g.lineWidth = 1; g.strokeStyle = DOT_EDGE(); g.stroke();
     };
     const dim = [], bright = [];
     for (const n of G.nodes) { if (!shown(n)) continue; (lit(n) ? bright : dim).push(n); }
@@ -227,13 +240,13 @@
 
     // rings: search matches, the focused dot, new dots
     const ring = (n, color, extra = 3, w = 1.5) => { const p = toScreen(n); g.beginPath(); g.arc(p.x, p.y, rOf(n) + extra, 0, Math.PI * 2); g.lineWidth = w; g.strokeStyle = color; g.stroke(); };
-    if (searching) for (const n of G.matches) if (shown(n)) ring(n, '#3E63DD', 2.5, 1.25);
-    if (focus && shown(focus)) ring(focus, '#1D1E20', 3, 1.5);
+    if (searching) for (const n of G.matches) if (shown(n)) ring(n, ACCENT(), 2.5, 1.25);
+    if (focus && shown(focus)) ring(focus, INK(), 3, 1.5);
     for (const n of G.nodes) {
       if (!n.pulse) continue;
       const t = (now - n.pulse) / 2400;
       if (t >= 1) { n.pulse = 0; continue; }
-      g.globalAlpha = 1 - t; ring(n, '#3E63DD', 3 + t * 12, 1); g.globalAlpha = 1;
+      g.globalAlpha = 1 - t; ring(n, ACCENT(), 3 + t * 12, 1); g.globalAlpha = 1;
     }
   }
 

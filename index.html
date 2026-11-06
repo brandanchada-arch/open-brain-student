@@ -6,7 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>My Open Brain</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#FFFFFF">
+<script src="theme.js"></script>
+<meta name="theme-color" content="#141517">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -36,6 +37,17 @@
     --r: 8px; --r-lg: 10px;
     --ctl: 36px;
   }
+  :root { --err-line: #F3CFCC; --ok-line: #CDE8D8; --warn-line: #F1DDB0; --line-hover: #CFCFCB; --tab-active: #EBEBE9; --toast: #1D1E20;
+    --toggle-bg: var(--surface); --toggle-fg: var(--text); --toggle-line: var(--line-2); --toggle-right: 96px; }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #141517; --surface: #1B1C1F; --surface-2: #212226; --raised: #232428; --side: #17181A;
+    --line: #2B2D31; --line-2: #383A40; --hover: #26282C;
+    --text: #ECEDEE; --muted: #A3A7AD; --faint: #7E8289;
+    --accent: #7C9AF2; --accent-hover: #93ADF5; --accent-ink: #0E1424; --accent-soft: #1F2A47; --accent-line: #34456F;
+    --blue: #7C9AF2; --teal: #5CC4B2; --ok: #5CCB8E; --ok-soft: #16291F; --err: #F0837C; --err-soft: #321B1A; --warn: #E6B65C; --warn-soft: #2E2412;
+    --err-line: #5A2C2A; --ok-line: #25492F; --warn-line: #54431F; --line-hover: #4A4D53; --tab-active: #2C2E33; --toast: #33353A;
+  }
   [hidden] { display: none !important; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; background: var(--bg); }
@@ -59,7 +71,7 @@
   button.block { width: 100%; }
   button.secondary { background: var(--surface); color: var(--text); border-color: var(--line-2); }
   button.secondary:hover { background: var(--hover); }
-  button.danger { background: var(--surface); color: var(--err); border-color: #EFC9C6; }
+  button.danger { background: var(--surface); color: var(--err); border-color: var(--err-line); }
   .icon-btn { width: var(--ctl); min-width: var(--ctl); padding: 0; }
 
   /* Inputs: 16px text so iOS never zooms on focus */
@@ -69,7 +81,7 @@
     padding: 7px 11px; min-height: var(--ctl); outline: none; -webkit-appearance: none; appearance: none; line-height: 1.4;
     transition: border-color .12s ease, box-shadow .12s ease;
   }
-  input:hover, textarea:hover, select:hover { border-color: #CFCFCB; }
+  input:hover, textarea:hover, select:hover { border-color: var(--line-hover); }
   input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   input[type="checkbox"] { -webkit-appearance: auto; appearance: auto; min-height: 0; width: auto; accent-color: var(--accent); box-shadow: none; }
   input[type="range"] { -webkit-appearance: auto; appearance: auto; border: 0; padding: 0; background: none; accent-color: var(--accent); box-shadow: none; min-height: 0; }
@@ -138,10 +150,10 @@
   .dot.on { background: #34A66A; }
   .dot.off { background: var(--err); }
   .msg { font-size: 13px; padding: 9px 12px; border-radius: var(--r); margin-top: 10px; line-height: 1.45; border: 1px solid; }
-  .msg.ok { background: var(--ok-soft); color: var(--ok); border-color: #CDE8D8; }
-  .msg.err { background: var(--err-soft); color: var(--err); border-color: #F3CFCC; }
+  .msg.ok { background: var(--ok-soft); color: var(--ok); border-color: var(--ok-line); }
+  .msg.err { background: var(--err-soft); color: var(--err); border-color: var(--err-line); }
   .offline-bar { display: none; position: sticky; top: calc(var(--safe-top) + 4px); z-index: 5; margin: 0 0 12px; padding: 8px 12px; border-radius: var(--r);
-    background: var(--warn-soft); color: var(--warn); border: 1px solid #F1DDB0; font-size: 13px; font-weight: 500; }
+    background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn-line); font-size: 13px; font-weight: 500; }
   body.offline .offline-bar { display: block; }
   .stale { opacity: .7; pointer-events: none; }
   .link { color: var(--accent); cursor: pointer; font-size: 13px; }
@@ -195,7 +207,7 @@
   .gq-meta { font-size: 12.5px; color: var(--muted); margin: 0 2px 12px; }
   .lib-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
   .lib-item { cursor: pointer; transition: border-color .12s, background .12s; }
-  .lib-item:hover { border-color: var(--line-2); background: #FDFDFC; }
+  .lib-item:hover { border-color: var(--line-2); background: var(--hover); }
   .lib-title { font-size: 14.5px; font-weight: 500; line-height: 1.4; }
   .lib-reader { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 18px; margin-bottom: 14px; }
   .lib-reader .lib-text { white-space: pre-wrap; line-height: 1.65; font-size: 14.5px; margin-top: 12px; overflow-wrap: anywhere; }
@@ -211,9 +223,9 @@
   .gq-answer-box { padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); font-size: 14.5px; line-height: 1.55; }
   .gq-buttons { display: flex; gap: 8px; }
   .gq-buttons > .grow { flex: 1; }
-  .gq-got { background: var(--surface); color: var(--ok); border: 1px solid #CDE8D8; }
+  .gq-got { background: var(--surface); color: var(--ok); border: 1px solid var(--ok-line); }
   .gq-got:hover { background: var(--ok-soft); }
-  .gq-miss { background: var(--surface); color: var(--err); border: 1px solid #F3CFCC; }
+  .gq-miss { background: var(--surface); color: var(--err); border: 1px solid var(--err-line); }
   .gq-miss:hover { background: var(--err-soft); }
   .gq-swipe { text-align: center; font-size: 12px; color: var(--faint); margin-top: 10px; }
   .gq-done { text-align: center; padding: 32px 22px; }
@@ -239,7 +251,7 @@
   .legend-chip.off { color: var(--faint); background: var(--surface-2); }
   .legend-chip.off .gs-dot { background: var(--line-2) !important; }
   .legend-chip.reset { color: var(--accent); border-color: transparent; background: transparent; }
-  .graph-wrap { position: relative; height: clamp(380px, calc(100dvh - 300px), 760px); border-radius: var(--r-lg); overflow: hidden; background: #FFFFFF; border: 1px solid var(--line); }
+  .graph-wrap { position: relative; height: clamp(380px, calc(100dvh - 300px), 760px); border-radius: var(--r-lg); overflow: hidden; background: var(--surface); border: 1px solid var(--line); }
   #graphCanvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; cursor: grab; }
   #graphCanvas.pointing { cursor: pointer; }
   #graphCanvas.dragging { cursor: grabbing; }
@@ -282,7 +294,7 @@
   .brand-mark::after { content: ''; position: absolute; left: 5px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--bg); }
   .tabbar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; height: calc(var(--nav-h) + var(--safe-bottom)); padding: 0 4px var(--safe-bottom);
-    background: #FFFFFF; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    background: var(--surface); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
     transition: transform .2s ease, opacity .2s ease;
   }
   .tabbar button {
@@ -340,7 +352,7 @@
     .nav-brand { order: -2; display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 14px; padding: 6px 10px 18px; letter-spacing: -0.01em; }
     .tabbar button { flex-direction: row; justify-content: flex-start; gap: 10px; height: 32px; padding: 0 10px; border-radius: 6px; font-size: 13.5px; color: var(--muted); }
     .tabbar button:hover { background: var(--hover); color: var(--text); }
-    .tabbar button.active { background: #EBEBE9; color: var(--text); }
+    .tabbar button.active { background: var(--tab-active); color: var(--text); }
     .tabbar svg { width: 17px; height: 17px; }
     .tabbar button.capture { order: -1; margin-bottom: 12px; border: 1px solid var(--line-2); background: var(--surface); color: var(--text); }
     .tabbar button.capture svg { color: var(--accent); }
@@ -353,6 +365,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  @media (max-width: 767px) { #themeToggle { top: auto !important; right: auto !important; left: 12px; bottom: calc(var(--safe-bottom) + 70px); } }
 </style>
 </head>
 <body>
