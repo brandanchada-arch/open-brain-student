@@ -60,3 +60,8 @@ One line each: date, decision, why.
 - 2026-11-03: Sunday condenser reuses the existing Vault secret `service_role_key`, so nobody handled a key. Test run read 9 notes and wrote 3 first-draft proposals (core, job-search, mega) for Brandan to review.
 - 2026-11-03: `MCP_ACCESS_KEY` printed into a Claude session's log during PC setup, because a masking filter only hid values of 16+ characters. Replacing it was offered and recommended (it's short, and it opens all notes over the internet). Brandan chose to keep it.
 - 2026-11-03: Scheduled task and Claude settings hooks were installed by a script Brandan ran himself, because Claude Code's safety check blocked Claude from doing them.
+
+## Merging the overnight work with automatic updates (2026-11-05)
+
+- 2026-11-05: Where `overnight/finish-brain` and `master` disagreed, `master` won. So a topic page's first draft from older notes now applies by itself like any other change, instead of always waiting in Review as the overnight brief planned. It still waits if it's personal or rests only on the library, and it can be undone. Brandan can still choose to make these drafts wait.
+- 2026-11-05: Older notes back a topic page's first draft only once. A draft that was rejected, undone or left to expire isn't redrafted from them, though new notes can still fill the page. Core keeps `master`'s rule and tries again until it has text.

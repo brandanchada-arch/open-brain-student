@@ -2,6 +2,8 @@
 
 Things that need you, or an action that was off limits overnight. Newest items go under their topic.
 
+**About every "redeploy from `master`" undo below:** that only works until this overnight work is merged into `master`. After that, redeploy from commit `4bae8c3`, the last `master` before it.
+
 ## Push the overnight commits to GitHub (do this first)
 
 The resume session's `git push` needed a person's approval, and nobody was there to give it. So its commits are
@@ -133,10 +135,9 @@ npx supabase functions deploy open-brain-mcp --no-verify-jwt --project-ref zqbjx
 ```
 Then restart Claude Desktop or reconnect its connector to see `get_page` and `brain_health`.
 
-**What happens next:** the next Sunday run drafts the empty Courses page as a proposal, unless Courses already has one by then.
-A draft you reject isn't tried again, and later weekly updates still work as normal.
-
-**Waiting for you now in Brain → Review:** 3 first drafts, for Core, Job search and MEGA.
+**What happens next:** the next Sunday run drafts the empty Courses page, unless Courses already has a proposal by then.
+Like any other change, the draft applies by itself. It waits in Brain → Review only if it mentions something personal or rests only on library entries. You can undo it in Review.
+A draft you undo, reject or leave to expire (14 days) isn't tried again from older notes, and later weekly updates still work as normal.
 
 **Undo:** redeploy both from `master`. Nothing else changed.
 

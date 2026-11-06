@@ -12,6 +12,7 @@ import {
 } from "../_shared/library-mcp.ts";
 import {
   ADD_SESSION_LOG_DESCRIPTION, addDoorFlags, addSessionLog, GET_CORE_DESCRIPTION, GET_PAGE_DESCRIPTION, getCoreText, getPageText, labelRecent, MCP_INSTRUCTIONS,
+  RECENT_SESSIONS_DESCRIPTION, recentSessions,
 } from "../_shared/core-memory.ts";
 
 // These come from Supabase automatically — no setup needed.
@@ -74,6 +75,11 @@ const TOOLS = [
         title: { type: "string", description: "A few words naming the session" },
         summary: { type: "string", description: "Short summary (max 2,000 characters): what was done, decisions, next steps" },
         project: { type: "string", description: "Optional project name, e.g. open-brain" },
+        about_me: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional: up to 3 short lasting things the user's own words showed about them",
+        },
       },
       required: ["title", "summary"],
     },
@@ -85,6 +91,14 @@ const TOOLS = [
       "notes without tags, an overdue PC backup (problems), plus counts of flagged library entries, " +
       "stale notes and proposals waiting (info). Counts and dates only, never note text.",
     inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "recent_sessions",
+    description: RECENT_SESSIONS_DESCRIPTION,
+    inputSchema: {
+      type: "object",
+      properties: { limit: { type: "number", description: "How many sessions (default 5, max 20)" } },
+    },
   },
   {
     name: "search_thoughts",
@@ -454,11 +468,12 @@ Deno.serve(async (req) => {
 
       // ---------------- Core memory tools ----------------
       // Service role again, so both are filtered to OWNER_USER_ID.
-      if (toolName === "get_core" || toolName === "add_session_log") {
+      if (toolName === "get_core" || toolName === "add_session_log" || toolName === "recent_sessions") {
         if (!OWNER_USER_ID) {
           throw new Error("OWNER_USER_ID is not set in Edge Function secrets");
         }
         if (toolName === "get_core") return textResult(id, await getCoreText(supabase, OWNER_USER_ID));
+        if (toolName === "recent_sessions") return textResult(id, await recentSessions(supabase, OWNER_USER_ID, args));
         return textResult(id, await addSessionLog(supabase, OWNER_USER_ID, args));
       }
 

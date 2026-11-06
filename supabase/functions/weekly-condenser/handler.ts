@@ -12,7 +12,8 @@
 // deno-lint-ignore-file no-explicit-any
 import {
   buildCondenserPrompt, cleanProposals, CONDENSER_LIMITS, CONDENSER_SYSTEM_PROMPT, formatItems,
-  isDoorFlagged, PAGE_SLUGS, PAGE_TITLES, parseLlmJson, type SourceItem, toSourceItems,
+  changedLines, isDoorFlagged, PAGE_SLUGS, PAGE_TITLES, parseLlmJson, PENDING_EXPIRY_DAYS, shouldAutoApply, type SourceItem,
+  staleFocusLines, toSourceItems,
 } from "../_shared/core-memory.ts";
 
 export type CondenserDeps = {
@@ -45,11 +46,23 @@ export async function runCondenser(deps: CondenserDeps) {
   const pages: Record<string, string> = {};
   for (const p of pageRows ?? []) pages[p.slug] = p.current_text ?? "";
 
-  // 2. Pages that already have a proposal waiting are left alone this week.
-  const { data: proposalRows, error: pendErr } = await db
-    .from("brain_proposals").select("target_slug, status").eq("user_id", ownerId);
-  if (pendErr) fail("Could not read proposals", pendErr);
-  const skipSlugs = [...new Set((proposalRows ?? []).filter((r: any) => r.status === "pending").map((r: any) => r.target_slug))] as string[];
+  // 2. An approval nobody answered expires. A waiting change doesn't stop a page updating,
+  //    except a page's first draft: a second draft of an empty page would only compete with it.
+  const expiry = new Date(now.getTime() - PENDING_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  {
+    const { error } = await db.from("brain_proposals")
+      .update({ status: "rejected", reviewed_at: now.toISOString() })
+      .eq("user_id", ownerId).eq("status", "pending").lt("created_at", expiry);
+    if (error) fail("Could not expire old proposals", error);
+  }
+  const { data: pendingRows, error: pendErr } = await db
+    .from("brain_proposals").select("target_slug, proposed_text, base_text").eq("user_id", ownerId).eq("status", "pending");
+  if (pendErr) fail("Could not read pending proposals", pendErr);
+  const skipSlugs = [...new Set((pendingRows ?? []).map((r: any) => r.target_slug))]
+    .filter((slug: any) => !String(pages[slug] ?? "").trim()) as string[];
+  const waitingLines = (pendingRows ?? [])
+    .filter((r: any) => r.base_text != null && !skipSlugs.includes(r.target_slug))
+    .flatMap((r: any) => changedLines(r.base_text, r.proposed_text));
   if (PAGE_SLUGS.every((s) => skipSlugs.includes(s))) {
     return { ok: true, skipped: true, note: "Every page already has a proposal waiting for review." };
   }
@@ -91,10 +104,15 @@ export async function runCondenser(deps: CondenserDeps) {
   const items = toSourceItems(thoughts ?? [], library ?? [], logs ?? []);
   const flaggedSkipped = (library ?? []).length - items.filter((i) => i.kind === "library").length;
 
-  // 4. A page's first draft, once only: it's empty and has never had a proposal (a rejected
-  //    draft isn't tried again) -> also read short summaries of older notes and library entries.
+  // 4. A page's first draft: it's empty and nothing is waiting for it -> also read short summaries
+  //    of older notes and library entries. Topic pages get this once: a draft that was rejected,
+  //    undone or left to expire isn't tried again. Core keeps trying until it has text.
+  const { data: proposalRows, error: propErr } = await db
+    .from("brain_proposals").select("target_slug").eq("user_id", ownerId);
+  if (propErr) fail("Could not read past proposals", propErr);
   const proposedBefore = new Set((proposalRows ?? []).map((r: any) => r.target_slug));
-  const bootstrapSlugs = PAGE_SLUGS.filter((s) => !String(pages[s] ?? "").trim() && !proposedBefore.has(s)) as string[];
+  const bootstrapSlugs = PAGE_SLUGS.filter((s) =>
+    !String(pages[s] ?? "").trim() && !skipSlugs.includes(s) && (s === "core" || !proposedBefore.has(s))) as string[];
   let bootstrapNotes = "";
   if (bootstrapSlugs.length) {
     const { data: all, error: aErr } = await db
@@ -150,7 +168,8 @@ export async function runCondenser(deps: CondenserDeps) {
   }
 
   const weekCount = items.filter((i) => !i.ref.startsWith("B")).length;
-  if (weekCount === 0 && !bootstrapNotes) {
+  const staleLines = skipSlugs.includes("core") ? [] : staleFocusLines(pages.core, now);
+  if (weekCount === 0 && !bootstrapNotes && staleLines.length === 0) {
     return { ok: true, skipped: true, note: "Nothing new in the last 7 days. No proposals written.", flaggedSkipped };
   }
 
@@ -160,6 +179,9 @@ export async function runCondenser(deps: CondenserDeps) {
     weekNotes: formatItems(items.filter((i) => !i.ref.startsWith("B"))),
     bootstrapNotes: bootstrapNotes || undefined,
     bootstrapSlugs,
+    today: now.toISOString().slice(0, 10),
+    staleLines,
+    waitingLines,
   });
   const answer = await deps.callLlm(CONDENSER_SYSTEM_PROMPT, prompt, MAX_TOKENS);
   const parsed = parseLlmJson(answer, deps.repair);
@@ -167,18 +189,28 @@ export async function runCondenser(deps: CondenserDeps) {
     // Fail safely: write nothing. Next week's run tries again.
     throw new Error("The AI's answer was not usable JSON, so nothing was written");
   }
-  const { proposals, dropped } = cleanProposals(parsed, items, pages, skipSlugs, bootstrapSlugs);
+  const { proposals, dropped } = cleanProposals(parsed, items, pages, skipSlugs, staleLines.length > 0, bootstrapSlugs);
   if (dropped.length) console.log("weekly-condenser dropped:", dropped.join("; "));
   if (proposals.length === 0) {
     return { ok: true, written: 0, note: "No page needed a change.", dropped, notesRead: weekCount, flaggedSkipped };
   }
 
-  const { error: insErr } = await db.from("brain_proposals").insert(
-    proposals.map((p) => ({ ...p, user_id: ownerId, status: "pending" })),
-  );
+  const { data: saved, error: insErr } = await db.from("brain_proposals").insert(
+    proposals.map((p) => ({ ...p, user_id: ownerId, status: "pending", auto_applied: shouldAutoApply(p, pages) })),
+  ).select("id, target_slug, auto_applied");
   if (insErr) fail("Could not save proposals", insErr);
+
+  // Goes through the normal approve function, so undo, history and the dropped list all work.
+  // If one fails it just stays waiting in Review.
+  const applied: string[] = [];
+  for (const row of saved ?? []) {
+    if (!row.auto_applied) continue;
+    const { error } = await db.rpc("approve_brain_proposal", { p_user_id: ownerId, p_proposal_id: row.id });
+    if (error) console.error(`Could not auto-apply ${row.target_slug}:`, error.message);
+    else applied.push(row.target_slug);
+  }
   return {
-    ok: true, written: proposals.length, slugs: proposals.map((p) => p.target_slug),
+    ok: true, written: proposals.length, slugs: proposals.map((p) => p.target_slug), applied,
     dropped, notesRead: weekCount, flaggedSkipped, bootstrap: Boolean(bootstrapNotes),
   };
 }

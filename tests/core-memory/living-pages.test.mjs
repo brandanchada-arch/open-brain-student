@@ -1,4 +1,5 @@
-// Living topic pages: a one-time first draft for empty pages, always a proposal, and the MCP page reader.
+// Living topic pages: a one-time first draft for empty pages, under the same rules as any other
+// change (it applies by itself unless it's personal or rests only on the library), and the MCP page reader.
 // Fake database, fake AI, made-up notes.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -48,16 +49,57 @@ const draftFor = (slug) => (prompt) => JSON.stringify({ proposals: [
   { target_slug: slug, proposed_text: '- FIN-400: valuation, thesis topic picked.', reason: 'First draft', sources: [refOf(prompt, 'thesis topic'), refOf(prompt, 'Valuation lecture')], sensitive: false },
 ] });
 
-test('an empty topic page gets a first draft from older notes and library, as a proposal', async () => {
-  const db = fakeDb(world());
+// Stands in for the real approve function, which puts the text on the page.
+function approvals() {
+  const calls = [];
+  return {
+    calls,
+    handlers: {
+      approve_brain_proposal: (args, data) => {
+        calls.push(args.p_proposal_id);
+        const p = data.brain_proposals.find((x) => x.id === args.p_proposal_id);
+        p.status = 'approved';
+        data.brain_pages.find((x) => x.slug === p.target_slug).current_text = p.proposed_text;
+        return { ok: true };
+      },
+    },
+  };
+}
+
+test('a first draft from older notes and library applies by itself, through the approve function', async () => {
+  const ok = approvals();
+  const db = fakeDb(world(), ok.handlers);
   const llm = llmAnswer(draftFor('courses'));
   const r = await runCondenser({ db, ownerId: ME, callLlm: llm, now: NOW });
   assert.equal(r.written, 1);
+  assert.deepEqual(r.applied, ['courses']);
+  assert.equal(ok.calls.length, 1);
   const p = db.data.brain_proposals[0];
   assert.equal(p.target_slug, 'courses');
-  assert.equal(p.status, 'pending');
+  assert.equal(p.auto_applied, true);
   assert.deepEqual(p.source_ids.map((s) => s.id).sort(), ['l-ok', 't-old']);
   assert.match(llm.calls[0], /These pages are empty: courses\./);
+  assert.equal(db.data.brain_pages.find((x) => x.slug === 'courses').current_text, p.proposed_text);
+});
+
+test('a first draft waits if it rests only on the library or mentions something personal', async () => {
+  const onlyLibrary = approvals();
+  const db1 = fakeDb(world(), onlyLibrary.handlers);
+  await runCondenser({ db: db1, ownerId: ME, now: NOW, callLlm: llmAnswer((prompt) => JSON.stringify({ proposals: [
+    { target_slug: 'courses', proposed_text: '- FIN-400: valuation.', reason: 'First draft', sources: [refOf(prompt, 'Valuation lecture')] },
+  ] })) });
+  assert.equal(onlyLibrary.calls.length, 0);
+  assert.equal(db1.data.brain_proposals[0].status, 'pending');
+  assert.equal(db1.data.brain_pages.find((x) => x.slug === 'courses').current_text, '');
+
+  const personal = approvals();
+  const db2 = fakeDb(world(), personal.handlers);
+  await runCondenser({ db: db2, ownerId: ME, now: NOW, callLlm: llmAnswer((prompt) => JSON.stringify({ proposals: [
+    { target_slug: 'courses', proposed_text: '- FIN-400, moved to Mondays around therapy.', reason: 'First draft', sources: [refOf(prompt, 'thesis topic')] },
+  ] })) });
+  assert.equal(personal.calls.length, 0);
+  assert.equal(db2.data.brain_proposals[0].status, 'pending');
+  assert.equal(db2.data.brain_proposals[0].sensitive, true);
 });
 
 test('many older thoughts cannot crowd the library out of a first draft', async () => {
@@ -77,13 +119,12 @@ test('many older thoughts cannot crowd the library out of a first draft', async 
   assert.ok(summaries.length <= 20_100, `the total stays near its limit (${summaries.length})`);
 });
 
-test('nothing writes to a page: the text stays as it was', async () => {
-  const db = fakeDb(world());
+test('a draft only reaches a page through the approve function, so undo and history work', async () => {
+  const db = fakeDb(world(), approvals().handlers);
   await runCondenser({ db, ownerId: ME, callLlm: llmAnswer(draftFor('courses')), now: NOW });
-  assert.equal(db.data.brain_pages.find((x) => x.slug === 'courses').current_text, '');
   assert.ok(!db.log.some((l) => l.table === 'brain_pages' && !['select', 'upsert'].includes(l.op)));
   const src = readFileSync(new URL('../../supabase/functions/weekly-condenser/handler.ts', import.meta.url), 'utf8');
-  assert.doesNotMatch(src, /approve_brain_proposal|from\("brain_pages"\)\s*\.update/);
+  assert.doesNotMatch(src, /from\("brain_pages"\)\s*\.update/);
 });
 
 test('flagged library entries, digests, news lists, other people and full text stay out', async () => {
@@ -121,6 +162,25 @@ test('one time only: a rejected draft is not tried again', async () => {
   assert.equal(r.skipped, true);
 });
 
+test('one time only: a first draft left to expire is not tried again either', async () => {
+  const unanswered = { user_id: ME, target_slug: 'courses', status: 'pending', proposed_text: 'x', created_at: days(15) };
+  const db = fakeDb(world({ brain_proposals: [unanswered] }));
+  const llm = llmAnswer(draftFor('courses'));
+  const r = await runCondenser({ db, ownerId: ME, callLlm: llm, now: NOW });
+  assert.equal(db.data.brain_proposals[0].status, 'rejected');
+  assert.equal(llm.calls.length, 0);
+  assert.equal(r.skipped, true);
+});
+
+test('an empty core page with a rejected draft still gets older notes, so it can fill in', async () => {
+  const w = world({ brain_proposals: [{ user_id: ME, target_slug: 'core', status: 'rejected' }] });
+  w.brain_pages.find((p) => p.slug === 'core').current_text = '';
+  w.brain_pages.find((p) => p.slug === 'courses').current_text = 'Filled courses.';
+  const llm = llmAnswer({ proposals: [] });
+  await runCondenser({ db: fakeDb(w), ownerId: ME, callLlm: llm, now: NOW });
+  assert.match(llm.calls[0], /These pages are empty: core\./);
+});
+
 test('a page with a proposal waiting is left alone', async () => {
   const db = fakeDb(world({ brain_proposals: [{ user_id: ME, target_slug: 'courses', status: 'pending' }] }));
   const llm = llmAnswer(draftFor('courses'));
@@ -130,7 +190,7 @@ test('a page with a proposal waiting is left alone', async () => {
 });
 
 test('someone else\'s proposals do not count', async () => {
-  const db = fakeDb(world({ brain_proposals: [{ user_id: OTHER, target_slug: 'courses', status: 'rejected' }] }));
+  const db = fakeDb(world({ brain_proposals: [{ user_id: OTHER, target_slug: 'courses', status: 'rejected' }] }), approvals().handlers);
   const r = await runCondenser({ db, ownerId: ME, callLlm: llmAnswer(draftFor('courses')), now: NOW });
   assert.equal(r.written, 1);
 });
@@ -138,7 +198,7 @@ test('someone else\'s proposals do not count', async () => {
 test('cleanProposals: older-note refs only back pages in the first-draft list', () => {
   const items = [{ ref: 'B1', kind: 'thought', id: 'x', date: '2026-01-01', text: 't', label: 'l' }];
   const parsed = { proposals: [{ target_slug: 'courses', proposed_text: 'New', sources: ['B1'] }] };
-  assert.equal(cleanProposals(parsed, items, {}, [], ['courses']).proposals.length, 1);
+  assert.equal(cleanProposals(parsed, items, {}, [], false, ['courses']).proposals.length, 1);
   assert.equal(cleanProposals(parsed, items, {}, []).proposals.length, 0);
 });
 

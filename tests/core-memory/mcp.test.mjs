@@ -55,7 +55,8 @@ test('open-brain-mcp lists both tools, sends instructions on initialize, and che
   assert.match(src, /name: "get_core"/);
   assert.match(src, /name: "add_session_log"/);
   assert.match(src, /instructions: MCP_INSTRUCTIONS/);
-  assert.match(src, /toolName === "get_core" \|\| toolName === "add_session_log"\) \{\s*if \(!OWNER_USER_ID\)/);
+  assert.match(src, /name: "recent_sessions"/);
+  assert.match(src, /toolName === "get_core" \|\| toolName === "add_session_log" \|\| toolName === "recent_sessions"\) \{\s*if \(!OWNER_USER_ID\)/);
   assert.match(MCP_INSTRUCTIONS, /START of every chat, call get_core/);
   assert.match(GET_CORE_DESCRIPTION, /START of every chat/);
 });

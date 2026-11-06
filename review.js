@@ -1,7 +1,7 @@
 // Brain screen: Review tab (core memory, Nov 3, 2026).
-// Every Sunday weekly-condenser PROPOSES changes to your brain pages (core, job-search,
-// courses, mega). Nothing changes until you press Approve here. Undo puts back the page
-// from before the last approved change (press again to go further back).
+// Every Sunday weekly-condenser updates your brain pages (core, job-search, courses, mega).
+// Most changes apply on their own; only big personal ones wait for Approve here. Undo puts
+// back the page from before the last change (press again to go further back).
 // Reads use your own login (row-level security keeps it to your rows). Approve / Reject /
 // Undo go through the review-proposal function, which checks who you are from your login.
 
@@ -13,6 +13,9 @@
 
   let pages = [];
   let proposals = [];
+  let notes = [];
+  let droppedItems = [];
+  let autoChanges = [];
   let busy = false;
 
   const panel = $('panel-review');
@@ -20,11 +23,19 @@
     <div id="rvHealth"></div>
     <div class="rv-head"><h2>Waiting for review</h2>
       <button class="secondary" id="rvUndo" type="button">Undo last change</button></div>
-    <div class="gq-meta">Weekly suggestions for your brain pages. Nothing changes until you approve.</div>
+    <div class="gq-meta">Only big personal changes wait here. Everything else updates on its own each Sunday, and Undo reverses the latest change.</div>
     <div id="rvMsg" role="status"></div>
     <div id="rvList"><div class="pl-empty">Loading…</div></div>
+    <div class="section-title"><span>Updated automatically</span></div>
+    <div id="rvAuto"></div>
     <div class="section-title"><span>Your pages</span></div>
-    <div id="rvPages"></div>`;
+    <div id="rvPages"></div>
+    <div class="section-title"><span>What Claude noticed about you</span></div>
+    <div class="gq-meta">Saved automatically from your sessions. Delete anything that's wrong.</div>
+    <div id="rvNotes"></div>
+    <div class="section-title"><span>Dropped from your core page</span></div>
+    <div class="gq-meta">Lines that left your core page, and when.</div>
+    <div id="rvDropped"></div>`;
 
   const pageName = (slug) => (pages.find(p => p.slug === slug) || {}).title || PAGE_NAMES[slug] || slug;
   const pageText = (slug) => (pages.find(p => p.slug === slug) || {}).current_text || '';
@@ -76,13 +87,27 @@
   function render() {
     $('rvList').innerHTML = proposals.length
       ? proposals.map(proposalCard).join('')
-      : '<div class="pl-empty">Nothing waiting. New suggestions arrive on Sundays.</div>';
+      : '<div class="pl-empty">Nothing waiting for you.</div>';
+    $('rvAuto').innerHTML = autoChanges.length ? autoChanges.map(a => `<div class="thought-card">
+        <div class="thought-meta">${esc(pageName(a.target_slug))} page · ${esc(when(a.reviewed_at))}</div>
+        <div>${esc(a.reason)}</div></div>`).join('')
+      : '<div class="pl-empty">No automatic updates yet.</div>';
     const sorted = [...pages].sort((a, b) => {
       const ia = PAGE_ORDER.indexOf(a.slug), ib = PAGE_ORDER.indexOf(b.slug);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a.slug).localeCompare(String(b.slug));
     });
     $('rvPages').innerHTML = sorted.length ? sorted.map(pageCard).join('')
       : '<div class="pl-empty">No pages yet. They are made the first time the weekly condenser runs.</div>';
+    $('rvNotes').innerHTML = notes.length ? notes.map(n => `<div class="thought-card" data-rv-note="${esc(n.id)}">
+        <div class="thought-meta">${esc(when(n.created_at))}${n.project ? ' · ' + esc(n.project) : ''}</div>
+        <div>${esc(n.note)}</div>
+        <div class="rv-actions"><button class="secondary" type="button" data-rv-note-del>Delete</button></div></div>`).join('')
+      : '<div class="pl-empty">Nothing yet. Notes appear after your Claude Code sessions.</div>';
+    $('rvDropped').innerHTML = droppedItems.length ? droppedItems.map(d => `<div class="thought-card">
+        <div class="thought-meta">Dropped ${esc(when(d.dropped_at))}</div>
+        <div>${esc(d.item)}</div>
+        ${d.reason ? `<div class="rv-reason">${esc(d.reason)}</div>` : ''}</div>`).join('')
+      : '<div class="pl-empty">Nothing has dropped off yet.</div>';
   }
 
   // Brain health card. Extra, so if it can't load the card just stays away.
@@ -113,16 +138,24 @@
     if (busy) return;
     loadHealth();
     try {
-      const [pr, pg] = await Promise.all([
+      const [pr, pg, nt, dr, au] = await Promise.all([
         sb.from('brain_proposals')
           .select('id, target_slug, proposed_text, reason, source_ids, sensitive, created_at')
           .eq('status', 'pending').order('created_at', { ascending: true }).limit(50),
         sb.from('brain_pages').select('slug, title, current_text, history_text, updated_at'),
+        sb.from('about_me_notes').select('id, note, project, created_at').order('created_at', { ascending: false }).limit(100),
+        sb.from('core_dropped_items').select('item, reason, dropped_at').order('dropped_at', { ascending: false }).limit(200),
+        sb.from('brain_proposals').select('target_slug, reason, reviewed_at')
+          .eq('status', 'approved').eq('auto_applied', true).order('reviewed_at', { ascending: false }).limit(20),
       ]);
       if (pr.error) throw pr.error;
       if (pg.error) throw pg.error;
       proposals = pr.data || [];
       pages = pg.data || [];
+      // These lists shouldn't stop the rest of the tab from loading.
+      notes = (nt && !nt.error && nt.data) || [];
+      droppedItems = (dr && !dr.error && dr.data) || [];
+      autoChanges = (au && !au.error && au.data) || [];
       render();
     } catch (err) {
       if (!proposals.length && !pages.length) $('rvList').innerHTML = '';
@@ -163,6 +196,24 @@
       say(action === 'approve' ? `${pageName(p.target_slug)} page updated. You can undo it.` : 'Rejected. The page was not changed.', true);
     } catch (err) {
       say(err.message || 'Could not save that.', false);
+    } finally {
+      busy = false; setButtons(false);
+      loadReview();
+    }
+  });
+
+  $('rvNotes').addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('[data-rv-note-del]');
+    const card = ev.target.closest('[data-rv-note]');
+    if (!btn || !card || busy) return;
+    if (!confirm('Delete this note? Claude will no longer see it.')) return;
+    busy = true; setButtons(true);
+    try {
+      const { error } = await sb.from('about_me_notes').delete().eq('id', card.dataset.rvNote);
+      if (error) throw error;
+      say('Note deleted.', true);
+    } catch (err) {
+      say(err.message || 'Could not delete that.', false);
     } finally {
       busy = false; setButtons(false);
       loadReview();

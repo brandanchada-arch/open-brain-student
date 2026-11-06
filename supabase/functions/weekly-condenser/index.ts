@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────
 // weekly-condenser: every Sunday (pg_cron, an hour after weekly-digest) it
-// reads the week's new notes and PROPOSES updates to your brain pages
-// (core, job-search, courses, mega). You approve or reject them in the app
-// (Brain → Review). It never changes a page itself.
+// reads the week's new notes and updates your brain pages (core, job-search,
+// courses, mega). Most changes apply on their own; big personal ones wait for
+// you in the app (Brain → Review).
 //
 // Every AI call goes through call-llm. This file never talks to an
 // AI company directly. The real work is in handler.ts.
@@ -38,6 +38,9 @@ async function callLlm(systemPrompt: string, prompt: string, maxTokens: number) 
       systemPrompt,
       prompt,
       maxTokens,
+      // Sonnet because this job changes pages by itself. In a side-by-side test on real
+      // notes, the default model rewrote lines and put things on the wrong pages.
+      model: "claude-sonnet-5-5",
       userId: OWNER_USER_ID ?? undefined,
       source: "weekly-condenser",
     }),

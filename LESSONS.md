@@ -17,3 +17,4 @@
 - **New Library doc types can leak into older readers.** The Sunday condenser reads every recent Library row, so outside video titles would have reached brain page proposals. When adding a doc type, check every reader of `library`. (2026-11-04)
 - **When a prompt joins several sources and then trims to a total, the later source gets starved.** One fixture row of each kind can't show it. Test with realistic volume and give each source its own room. (2026-11-04)
 - **Ask for the actual PASS/FAIL lines.** "done pass" hid four failed key checks until the output was pasted later. (2026-11-03)
+- **A test that skips on your computer can hide a break.** `master` added `--model sonnet` to the session log worker, but two tests still expected the old flags. They only ran on Linux, so nobody saw it until the overnight work made them run on Windows. (2026-11-05)
