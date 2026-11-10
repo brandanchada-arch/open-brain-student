@@ -12,7 +12,11 @@ Copy-Item -Recurse -Force "$PSScriptRoot\scripts\*" $target
 
 $node = (Get-Command node).Source
 $script = "$target\session-sweep.js"
-$action = New-ScheduledTaskAction -Execute $node -Argument "`"$script`""
+# Run with no console window. A task that starts node.exe directly gets a console, and closing it or a
+# stray Ctrl+C kills the run (exit code 3221225786). conhost always reports 0 to Task Scheduler,
+# so check claude-session-logs\.sweep-runs.log: a "start" with no "end" means a run was killed.
+$conhost = "$env:SystemRoot\System32\conhost.exe"
+$action = New-ScheduledTaskAction -Execute $conhost -Argument "--headless `"$node`" `"$script`""
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) -RepetitionInterval (New-TimeSpan -Hours 1)
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 15) -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName "Open Brain session sweep" -Action $action -Trigger $trigger -Settings $settings -Description "Summarizes Claude Code sessions that have gone quiet, one at a time." -Force | Out-Null

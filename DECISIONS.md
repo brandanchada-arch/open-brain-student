@@ -65,3 +65,6 @@ One line each: date, decision, why.
 
 - 2026-11-05: Where `overnight/finish-brain` and `master` disagreed, `master` won, with one exception Brandan chose: a topic page's first draft waits in Review if older notes were available to it, even if it doesn't cite them, because old notes can be out of date and the AI could use them without saying so. Weekly updates to a page with text stay automatic.
 - 2026-11-05: Older notes back a topic page's first draft only once. A draft that was rejected, undone or left to expire isn't redrafted from them, though new notes can still fill the page. Core keeps `master`'s rule and tries again until it has text.
+
+## 2026-11-06: Sweep runs with no console, and logs its own runs
+Hourly runs were dying with exit code 3221225786 (Ctrl+C or console closed), though two manual runs and the code were fine. The exact source was never proven, because nothing recorded it. Chose `conhost.exe --headless` over a VBScript wrapper (Windows is phasing VBScript out) and over a hidden PowerShell window (still flashes). Trade-off: Task Scheduler now always shows 0, so `claude-session-logs\.sweep-runs.log` is the real record.

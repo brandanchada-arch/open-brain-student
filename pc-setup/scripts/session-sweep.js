@@ -115,10 +115,22 @@ async function main({ now = Date.now() } = {}) {
   return { summarized, retried, results };
 }
 
+// One line when a run starts and one when it ends. A "start" with no "end" after it means
+// something killed the run, which leaves no other trace.
+function noteRun(text) {
+  try {
+    const dir = getConfig().sessionLogDir;
+    fs.mkdirSync(dir, { recursive: true });
+    fs.appendFileSync(path.join(dir, ".sweep-runs.log"), `${new Date().toISOString()} ${text}${os.EOL}`);
+  } catch { /* the log must never stop the sweep */ }
+}
+
 if (require.main === module) {
+  noteRun("start");
   main().then(
-    (r) => { console.log(JSON.stringify(r)); process.exit(0); },
+    (r) => { noteRun(`end ${JSON.stringify(r)}`); console.log(JSON.stringify(r)); process.exit(0); },
     (err) => {
+      noteRun("end with error");
       const dir = getConfig().sessionLogDir;
       try {
         fs.mkdirSync(dir, { recursive: true });
